@@ -484,7 +484,8 @@ function handleUpgrade(req, socket) {
 
 		switch (msg.t) {
 			case 'ping':
-				conn.send(JSON.stringify({ t: 'pong', ts: Date.now() }));
+				// 回传客户端发送时刻（算 RTT）+ 服务端当前时间（算时钟偏移）
+				conn.send(JSON.stringify({ t: 'pong', echo: msg.ts, now: Date.now() }));
 				break;
 			case 'idr':
 				engine.requestIdr();

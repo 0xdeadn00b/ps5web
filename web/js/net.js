@@ -51,8 +51,15 @@ export class StreamSocket {
 			if (!buf.length) return;
 			const op = buf[0];
 			const body = buf.subarray(1);
-			if (op === OP_VIDEO) this.onVideo(body);
-			else if (op === OP_AUDIO) this.onAudio(body);
+
+			if (op === OP_VIDEO) {
+				// [8 字节发送时间][桥接层帧数据]
+				if (body.length < 9) return;
+				const sentAt = Number(new DataView(body.buffer, body.byteOffset, 8).getBigUint64(0));
+				this.onVideo(body.subarray(8), sentAt);
+			} else if (op === OP_AUDIO) {
+				this.onAudio(body);
+			}
 		};
 
 		ws.onclose = () => {

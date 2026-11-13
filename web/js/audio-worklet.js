@@ -18,7 +18,8 @@ class PcmQueue extends AudioWorkletProcessor {
 		this.processed = 0;
 
 		const rate = sampleRate || 48000;
-		this.targetSamples = Math.round((rate * 50) / 1000); // 50ms
+		// 预充 30ms：比原来的 50ms 少一层缓冲，网络抖动大的话会有轻微爆音
+		this.targetSamples = Math.round((rate * 30) / 1000);
 
 		this.port.onmessage = (e) => {
 			const msg = e.data;

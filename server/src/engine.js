@@ -441,9 +441,12 @@ class Engine extends EventEmitter {
 		this.stats.frames++;
 		this.stats.bytes += payload.length;
 
-		const msg = Buffer.allocUnsafe(payload.length + 1);
+		// [0x10][8 字节 Date.now()][桥接层的帧数据]
+		// 那个时间戳让浏览器能算出「这一帧从 NAS 收到算起，到我手里花了多久」
+		const msg = Buffer.allocUnsafe(payload.length + 9);
 		msg[0] = OP_VIDEO;
-		payload.copy(msg, 1);
+		msg.writeBigUInt64BE(BigInt(Date.now()), 1);
+		payload.copy(msg, 9);
 
 		for (const v of this.viewers) {
 			if (v.bufferedAmount > VIEWER_DROP_BUFFER) continue;

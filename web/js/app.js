@@ -559,8 +559,8 @@ function preparePlayer() {
 		onError: (msg) => {
 			showOverlay('视频解码出错', msg, false);
 		},
-		onStats: ({ fps, queue }) => {
-			state.lastVideoStats = { fps, queue };
+		onStats: ({ fps, queue, arriveAge, displayAge }) => {
+			state.lastVideoStats = { fps, queue, arriveAge, displayAge };
 			updateHudStats();
 		},
 	});
@@ -569,13 +569,17 @@ function preparePlayer() {
 	state.input = new InputManager({ send: (pkt) => state.socket?.sendInput(pkt) });
 
 	state.socket = new StreamSocket();
-	state.socket.onVideo = (buf) => state.video?.push(buf);
+	state.socket.onVideo = (buf, sentAt) => state.video?.push(buf, sentAt);
 	state.socket.onAudio = (buf) => state.audio?.push(buf);
 	state.socket.onJson = onServerMessage;
 	state.socket.onOpen = () => {
 		state.input?.start();
-		state.socket.sendJson({ t: 'ping' });
+		sendPing();
 		if (VideoPipeline.supported) state.video?.requestKeyframe();
+
+		// 每 2 秒量一次 WS 往返 + 校一次时钟，判断延迟是不是网络造成的
+		clearInterval(state.pingTimer);
+		state.pingTimer = setInterval(sendPing, 2000);
 	};
 	state.socket.onClose = () => {
 		if (state.session.state === 'streaming') {
@@ -637,6 +641,10 @@ function onServerMessage(msg) {
 
 		case 'audio':
 			state.audio?.configure(msg.format);
+			break;
+
+		case 'pong':
+			onPong(msg);
 			break;
 
 		case 'waking':
@@ -737,6 +745,27 @@ function openPinDialog(incorrect) {
 	});
 }
 
+function sendPing() {
+	if (!state.socket?.connected) return;
+	state.socket.sendJson({ t: 'ping', ts: performance.now(), wall: Date.now() });
+}
+
+function onPong(msg) {
+	if (typeof msg.echo !== 'number') return;
+
+	const now = performance.now();
+	state.rtt = Math.round(now - msg.echo);
+
+	// 帧龄用的是 NAS 的时钟，两边不同步会算偏，这里估一个偏移量并平滑
+	if (typeof msg.now === 'number' && typeof msg.wall === 'number') {
+		const sample = msg.now - (msg.wall + (now - msg.echo) / 2);
+		state.clockSkew = state.clockSkew ? state.clockSkew * 0.7 + sample * 0.3 : sample;
+		if (state.video) state.video.clockSkew = state.clockSkew;
+	}
+
+	updateHudStats();
+}
+
 function updateHudStats() {
 	const parts = [];
 	const v = state.lastVideoStats;
@@ -744,8 +773,12 @@ function updateHudStats() {
 
 	if (v) parts.push(`${v.fps} fps`);
 	if (s?.kbps) parts.push(`${Math.round(s.kbps / 1000)} Mbps`);
-	if (state.audio?.bufferedMs) parts.push(`a${state.audio.bufferedMs}ms`);
+	if (v?.displayAge) parts.push(`延迟 ${v.displayAge}ms`);
+	if (state.rtt) parts.push(`RTT ${state.rtt}ms`);
+
 	$('#hud-stats').textContent = parts.join(' · ') || '--';
+	$('#hud-stats').title =
+		'延迟 = 这一帧从 NAS 发到画到屏幕上；RTT = 浏览器到 NAS 的往返（网络部分）';
 }
 
 function showOverlay(title, text, spinner) {
@@ -773,6 +806,10 @@ async function stopSession() {
 }
 
 function cleanupPlayer() {
+	clearInterval(state.pingTimer);
+	state.pingTimer = null;
+	state.rtt = 0;
+
 	state.socket?.close();
 	state.socket = null;
 

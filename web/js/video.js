@@ -88,6 +88,13 @@ export class VideoPipeline {
 		this.lastKeyRequestAt = 0;
 		this.firstFrameAt = 0;
 		this.keyFrameWait = 0;
+
+		// 延迟诊断：帧从 NAS 发出到我画到屏幕上的耗时
+		this.lastSentAt = 0;
+		this.clockSkew = 0; // NAS 与浏览器时钟差，由 app.js 通过 pong 校准
+		this.arriveAge = 0;
+		this.displayAge = 0;
+		this.lastDrawAt = 0;
 	}
 
 	static get supported() {
@@ -178,8 +185,13 @@ export class VideoPipeline {
 		}
 	}
 
-	push(buf) {
+	push(buf, sentAt) {
 		if (!buf || buf.length <= HDR + 4) return;
+
+		if (sentAt) {
+			this.lastSentAt = sentAt;
+			this.arriveAge = Date.now() - sentAt - this.clockSkew;
+		}
 
 		const dv = new DataView(buf.buffer, buf.byteOffset, HDR);
 		const ts = Number(dv.getBigUint64(0, true));
@@ -237,7 +249,14 @@ export class VideoPipeline {
 		}
 		this.latest = frame;
 
-		if (!this.raf) this.raf = requestAnimationFrame(() => this.#draw());
+		// rAF 最多要等一整个刷新周期（16.7ms）。如果距上次绘制已经超过 8ms，
+		// 说明再等 rAF 反而更亏，直接画。
+		const now = performance.now();
+		if (now - this.lastDrawAt > 8) {
+			this.#draw();
+		} else if (!this.raf) {
+			this.raf = requestAnimationFrame(() => this.#draw());
+		}
 	}
 
 	#draw() {
@@ -260,13 +279,21 @@ export class VideoPipeline {
 			/* ignore */
 		}
 		frame.close();
+		this.lastDrawAt = performance.now();
 
-		const now = performance.now();
+		if (this.lastSentAt) this.displayAge = Date.now() - this.lastSentAt - this.clockSkew;
+
+		const now = this.lastDrawAt;
 		if (now - this.lastStatsAt >= 1000) {
 			this.fps = Math.round((this.frames * 1000) / (now - this.lastStatsAt));
 			this.frames = 0;
 			this.lastStatsAt = now;
-			this.onStats({ fps: this.fps, queue: this.decoder ? this.decoder.decodeQueueSize : 0 });
+			this.onStats({
+				fps: this.fps,
+				queue: this.decoder ? this.decoder.decodeQueueSize : 0,
+				arriveAge: Math.round(this.arriveAge),
+				displayAge: Math.round(this.displayAge),
+			});
 		}
 	}
 }
