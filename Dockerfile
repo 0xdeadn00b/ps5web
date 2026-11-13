@@ -100,7 +100,7 @@ RUN if ldd /usr/local/bin/ps5web-bridge | grep -q 'not found'; then \
 VOLUME ["/data"]
 EXPOSE 8080
 
-HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-	CMD node -e "fetch('http://127.0.0.1:'+(process.env.PS5WEB_PORT||8080)+'/api/public').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+	CMD node -e "const tls=!!process.env.PS5WEB_TLS_CERT;const mod=tls?require('https'):require('http');const port=process.env.PS5WEB_PORT||8080;mod.get({host:'127.0.0.1',port,path:'/api/public',rejectUnauthorized:false},r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"
 
 CMD ["node", "/app/server/src/index.js"]
