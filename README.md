@@ -4,7 +4,7 @@
 
 底层不是重写的协议栈，而是把 [chiaki-ng](https://github.com/chiaki-ng/chiaki-ng) 的 `libchiaki` 直接编进一个桥接进程，配对、握手、SRTP、FEC 全部复用上游实现，上面再套一层 Web 服务。
 
-> 现成镜像：`docker pull xiaobai9978/ps5web:1.0.0`（[Docker Hub](https://hub.docker.com/r/xiaobai9978/ps5web)）
+> 源码：[github.com/xiaobai9978/ps5web](https://github.com/xiaobai9978/ps5web) · 现成镜像：`docker pull xiaobai9978/ps5web:1.0.0`（[Docker Hub](https://hub.docker.com/r/xiaobai9978/ps5web)）
 > 镜像里**不含任何配对凭据**，凭据只在你自己挂载的 `./data` 里。
 
 ```
@@ -125,6 +125,20 @@ docker build \
 
 > 镜像里只有：Debian bookworm 运行时库 + 编译好的 `ps5web-bridge` + Node 20/22 的服务端和前端。
 > 源码、编译器、chiaki-ng 的 .git 都在构建阶段丢掉，不进最终镜像。
+
+### 多架构镜像（amd64 + arm64）
+
+仓库里带了 `.github/workflows/docker.yml`：推一个 `v*` tag 或者手动触发，
+GitHub Actions 会用 buildx 构建 `linux/amd64` + `linux/arm64` 推到 Docker Hub。
+
+用之前先在仓库 `Settings → Secrets and variables → Actions` 里加两个 secret：
+
+| Secret | 值 |
+| --- | --- |
+| `DOCKERHUB_USERNAME` | 你的 Docker Hub 用户名 |
+| `DOCKERHUB_TOKEN` | Docker Hub 的 access token（不要用登录密码） |
+
+ARM 的群晖/树莓派也能跑，但如实说一句：**arm64 只验证到能构建**，没在真机上串流过。
 
 登录后：
 
