@@ -1,0 +1,21 @@
+**/node_modules
+**/.git
+**/.git/**
+*.log
+.DS_Store
+data/
+tls/
+build/
+
+# 用本地 chiaki-ng 源码构建时，只保留 libchiaki 需要的东西。
+# 前端目录里有指向未初始化子模块的悬空符号链接，会让 build context 直接失败。
+chiaki-ng/gui
+chiaki-ng/cli
+chiaki-ng/switch
+chiaki-ng/android
+chiaki-ng/setsu
+chiaki-ng/steamdeck_native
+chiaki-ng/test
+chiaki-ng/docs
+chiaki-ng/doc
+chiaki-ng/.github

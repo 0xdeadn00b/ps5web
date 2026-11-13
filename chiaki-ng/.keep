@@ -1,0 +1,7 @@
+# 放一份 chiaki-ng 源码到这里，构建时就不必联网 clone。
+# 需要带子模块：
+#   git clone --recurse-submodules --depth 1 --branch v1.10.1 \
+#     https://github.com/chiaki-ng/chiaki-ng.git chiaki-ng
+# 然后：docker build --build-arg CHIAKI_LOCAL=1 -t ps5web .
+#
+# 这个占位文件只是为了 COPY 通配符有东西可匹配，可以删掉（删了就要确保目录里有源码）。

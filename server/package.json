@@ -1,0 +1,13 @@
+{
+  "name": "ps5web-server",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Web front-end for chiaki-ng: stream a PS5 to any browser",
+  "scripts": {
+    "start": "node src/index.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

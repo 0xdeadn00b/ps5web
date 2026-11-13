@@ -1,0 +1,57 @@
+# PS5 Web Play —— 把 PS5 串流到任意浏览器
+#
+# 关键点：network_mode: host
+#   PS5 的发现用 UDP 广播（9302/987），串流的视频音频也是 UDP 回来。
+#   桥接模式虽然靠 conntrack 也能跑，但广播发现会失效，只能手动填 IP。
+#   用 host 网络最省事，端口也就是 PS5WEB_PORT 这一个。
+
+services:
+  ps5web:
+    # 现成镜像（238MB，拉下来不到 100MB）
+    image: xiaobai9978/ps5web:1.0.0
+
+    # 想改代码自己构建，取消下面注释（会覆盖上面的 image）
+    # build:
+    #   context: .
+    #   args:
+    #     CHIAKI_REPO: https://github.com/chiaki-ng/chiaki-ng.git
+    #     CHIAKI_REF: v1.10.1
+    #     # 国内构建一定要换 apt 源，deb.debian.org 能卡十分钟
+    #     APT_MIRROR: http://mirrors.ustc.edu.cn/debian
+    #     APT_SECURITY_MIRROR: http://mirrors.ustc.edu.cn/debian-security
+
+    container_name: ps5web
+    restart: unless-stopped
+    network_mode: host
+    environment:
+      # 留空 = 首次启动随机生成，密码打印在 docker logs 里
+      PS5WEB_PASSWORD: ""
+      PS5WEB_PORT: "8080"
+      # 默认画质，前端每次开始前还能改
+      PS5WEB_RESOLUTION: "1080p"
+      PS5WEB_FPS: "60"
+      PS5WEB_BITRATE: "18000"
+      PS5WEB_CODEC: "h264"
+      PS5WEB_LOG_LEVEL: "info"
+      TZ: Asia/Shanghai
+    volumes:
+      - ./data:/data
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+# 如果你的 NAS 不支持 host 网络（比如部分群晖套件版），
+# 改成桥接模式 + 手动填 PS5 的 IP：
+#
+#    ports:
+#      - "8080:8080"
+#
+# 但「扫描局域网」会失效。
+#
+# 想直接上 HTTPS（WebCodecs 和手柄都要求安全上下文），在 environment 里加：
+#
+#      PS5WEB_PORT: "8443"
+#      PS5WEB_TLS_CERT: /data/tls/cert.pem
+#      PS5WEB_TLS_KEY: /data/tls/key.pem

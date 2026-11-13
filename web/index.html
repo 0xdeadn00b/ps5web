@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="theme-color" content="#0b0f16">
+<title>PS5 Web Play</title>
+<link rel="icon" href="/img/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/css/app.css">
+</head>
+<body>
+
+<!-- ------------------------------ 登录 ------------------------------ -->
+<section id="view-login" class="view">
+	<form id="login-form" class="card login-card" autocomplete="on">
+		<div class="brand big">PS5 <span>Web Play</span></div>
+		<p class="muted">家里 NAS 上的串流服务，输入访问密码进入。</p>
+		<label class="field">
+			<span>访问密码</span>
+			<input id="login-password" type="password" autocomplete="current-password" required>
+		</label>
+		<button class="primary" type="submit">进入</button>
+		<p class="error" id="login-error"></p>
+		<p class="muted small" id="login-foot"></p>
+	</form>
+</section>
+
+<!-- ------------------------------ 主机列表 ------------------------------ -->
+<section id="view-home" class="view hidden">
+	<header class="topbar">
+		<div class="brand">PS5 <span>Web Play</span></div>
+		<div class="row gap">
+			<span class="pill" id="status-pill">空闲</span>
+			<button class="ghost" id="btn-logs" type="button">日志</button>
+			<button class="ghost" id="btn-logout" type="button">退出</button>
+		</div>
+	</header>
+
+	<main class="content">
+		<div class="section-head">
+			<h2>我的主机</h2>
+			<div class="row gap">
+				<button class="ghost" id="btn-discover" type="button">扫描局域网</button>
+			</div>
+		</div>
+		<div id="host-list" class="host-grid"></div>
+		<p class="muted empty-hint hidden" id="host-empty">
+			还没有主机。可以点「扫描局域网」，或者手动填 PS5 的 IP 添加。
+		</p>
+
+		<div id="discovered-wrap" class="hidden">
+			<div class="section-head"><h2>局域网里发现</h2></div>
+			<div id="discovered-list" class="host-grid"></div>
+		</div>
+
+		<div class="section-head"><h2>手动添加</h2></div>
+		<form id="add-form" class="add-form">
+			<input id="add-address" placeholder="PS5 的 IP，例如 192.168.1.50" required>
+			<input id="add-name" placeholder="备注名（可选）">
+			<button class="primary" type="submit">添加</button>
+		</form>
+
+		<div class="tips card">
+			<h3>使用前提</h3>
+			<ul>
+				<li>PS5 已开启「设置 → 系统 → 远程游玩 → 启用远程游玩」。</li>
+				<li>NAS 和 PS5 在同一个局域网；NAS 的 Docker 用 host 网络（发现和串流都靠 UDP）。</li>
+				<li>首次使用要在 PS5 上「关联设备」拿到 8 位 PIN，再配合 PSN Account-ID 配对一次。</li>
+			</ul>
+		</div>
+	</main>
+</section>
+
+<!-- ------------------------------ 播放 ------------------------------ -->
+<section id="view-player" class="view hidden">
+	<div class="stage" id="stage">
+		<canvas id="screen"></canvas>
+		<div class="touch-ui hidden" id="touch-ui"></div>
+
+		<div class="hud" id="hud">
+			<div class="hud-left">
+				<span class="rec-dot"></span>
+				<span id="hud-title">连接中…</span>
+			</div>
+			<div class="hud-right">
+				<span class="mono" id="hud-stats">--</span>
+				<button class="icon-btn" id="btn-audio" type="button" title="声音">🔊</button>
+				<button class="icon-btn" id="btn-touch" type="button" title="屏幕按键">🎮</button>
+				<button class="icon-btn" id="btn-keys" type="button" title="键盘映射">⌨</button>
+				<button class="icon-btn" id="btn-fullscreen" type="button" title="全屏">⛶</button>
+				<button class="icon-btn" id="btn-sleep" type="button" title="让 PS5 待机">🌙</button>
+				<button class="icon-btn danger" id="btn-stop" type="button" title="结束串流">✕</button>
+			</div>
+		</div>
+
+		<div class="overlay" id="player-overlay">
+			<div class="overlay-card">
+				<div class="spinner"></div>
+				<h3 id="overlay-title">正在连接 PS5…</h3>
+				<p class="muted" id="overlay-text">如果主机在待机，请先点「唤醒」。</p>
+				<div class="row gap center">
+					<button class="ghost" id="btn-overlay-cancel" type="button">取消</button>
+				</div>
+			</div>
+		</div>
+
+		<button class="audio-unlock hidden" id="audio-unlock" type="button">点击启用声音</button>
+	</div>
+</section>
+
+<div id="modal-root"></div>
+<div id="toast-root" class="toast-root"></div>
+
+<script type="module" src="/js/app.js"></script>
+</body>
+</html>
