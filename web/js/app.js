@@ -559,8 +559,8 @@ function preparePlayer() {
 		onError: (msg) => {
 			showOverlay('视频解码出错', msg, false);
 		},
-		onStats: ({ fps, queue, arriveAge, displayAge }) => {
-			state.lastVideoStats = { fps, queue, arriveAge, displayAge };
+		onStats: ({ fps, queue, arriveAge, displayAge, hardware, drops }) => {
+			state.lastVideoStats = { fps, queue, arriveAge, displayAge, hardware, drops };
 			updateHudStats();
 		},
 	});
@@ -748,6 +748,17 @@ function openPinDialog(incorrect) {
 function sendPing() {
 	if (!state.socket?.connected) return;
 	state.socket.sendJson({ t: 'ping', ts: performance.now(), wall: Date.now() });
+
+	// 把原始指标打到服务端日志，排查时不用开 DevTools
+	if (state.lastVideoStats) {
+		state.socket.sendJson({
+			t: 'diag',
+			...state.lastVideoStats,
+			rtt: state.rtt,
+			skew: Math.round(state.clockSkew || 0),
+			viewers: state.serverStats?.viewers,
+		});
+	}
 }
 
 function onPong(msg) {
@@ -773,12 +784,17 @@ function updateHudStats() {
 
 	if (v) parts.push(`${v.fps} fps`);
 	if (s?.kbps) parts.push(`${Math.round(s.kbps / 1000)} Mbps`);
-	if (v?.displayAge) parts.push(`延迟 ${v.displayAge}ms`);
+	if (v?.processMs !== undefined) parts.push(`处理 ${v.processMs}ms`);
+	if (v?.arriveAge) parts.push(`传输 ${v.arriveAge}ms`);
 	if (state.rtt) parts.push(`RTT ${state.rtt}ms`);
+	if (v?.queue !== undefined) parts.push(`队列 ${v.queue}`);
 
 	$('#hud-stats').textContent = parts.join(' · ') || '--';
 	$('#hud-stats').title =
-		'延迟 = 这一帧从 NAS 发到画到屏幕上；RTT = 浏览器到 NAS 的往返（网络部分）';
+		'处理 = 从浏览器收到这一帧到画到屏幕（纯本地时钟，最可信）\n' +
+		'传输 = 帧从 NAS 到你浏览器（依赖两边时钟同步，仅供参考）\n' +
+		'RTT = 往返时延；队列 = 待解码帧数\n' +
+		`解码器: ${state.lastVideoStats?.hardware ? '已请求硬解' : '默认'}，跳过关键帧次数: ${state.lastVideoStats?.drops ?? 0}`;
 }
 
 function showOverlay(title, text, spinner) {

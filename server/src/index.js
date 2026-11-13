@@ -493,6 +493,10 @@ function handleUpgrade(req, socket) {
 			case 'pin':
 				engine.sendPin(String(msg.pin || ''));
 				break;
+			case 'diag':
+				log.info('[diag]', JSON.stringify(msg));
+				break;
+
 			case 'stop':
 				engine.stop();
 				break;

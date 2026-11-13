@@ -80,6 +80,8 @@ export class VideoPipeline {
 
 		this.frames = 0;
 		this.errors = 0;
+		this.dropEvents = 0;
+		this.hardware = false;
 		this.lastStatsAt = performance.now();
 		this.fps = 0;
 		this.width = 0;
@@ -91,6 +93,8 @@ export class VideoPipeline {
 
 		// 延迟诊断：帧从 NAS 发出到我画到屏幕上的耗时
 		this.lastSentAt = 0;
+		this.recvMap = new Map(); // 帧 timestamp -> 浏览器收到时刻(performance.now)
+		this.processMs = 0;       // 收到 -> 画出，纯浏览器时钟
 		this.clockSkew = 0; // NAS 与浏览器时钟差，由 app.js 通过 pong 校准
 		this.arriveAge = 0;
 		this.displayAge = 0;
@@ -163,25 +167,41 @@ export class VideoPipeline {
 			this.decoder = null;
 		}
 
-		const cfg = { codec, optimizeForLatency: true };
+		const makeConfig = (hw) => {
+			const cfg = { codec, optimizeForLatency: true };
+			if (hw) cfg.hardwareAcceleration = hw;
+			if (codec.startsWith('avc1') || codec.startsWith('avc3')) cfg.avc = { format: 'annexb' };
+			else cfg.hevc = { format: 'annexb' };
+			return cfg;
+		};
 
-		if (codec.startsWith('avc1') || codec.startsWith('avc3')) cfg.avc = { format: 'annexb' };
-		else cfg.hevc = { format: 'annexb' };
+		// 软解 1080p60 基本跑不动，队列会一直堆积成几百毫秒的延迟。
+		// 先要求硬解，不支持再退回默认。
+		const attempts = ['prefer-hardware', undefined];
 
-		this.decoderConfig = cfg;
-
-		try {
-			this.decoder = new VideoDecoder({
-				output: (frame) => this.#onFrame(frame),
-				error: (e) => this.#fail(e),
-			});
-			this.decoder.configure(cfg);
-			this.dropping = true; // 等下一个关键帧
-			this.keyFrameWait = performance.now();
-			this.requestKeyframe();
-			console.log('[video] 已配置解码器', codec);
-		} catch (err) {
-			this.#fail(err);
+		for (const hw of attempts) {
+			const cfg = makeConfig(hw);
+			try {
+				const decoder = new VideoDecoder({
+					output: (frame) => this.#onFrame(frame),
+					error: (e) => this.#fail(e),
+				});
+				decoder.configure(cfg);
+				this.decoder = decoder;
+				this.decoderConfig = cfg;
+				this.hardware = hw === 'prefer-hardware';
+				this.dropping = true; // 等下一个关键帧
+				this.keyFrameWait = performance.now();
+				this.requestKeyframe();
+				console.log('[video] 已配置解码器', codec, hw ? '(要求硬解)' : '(默认)');
+				return;
+			} catch (err) {
+				if (hw) {
+					console.warn('[video] 硬解不可用，退回默认:', err.message);
+					continue;
+				}
+				this.#fail(err);
+			}
 		}
 	}
 
@@ -213,12 +233,21 @@ export class VideoPipeline {
 			this.dropping = false;
 		}
 
-		// 解码队列太深说明渲染跟不上：直接跳到下一个关键帧，避免延迟越拖越大
-		if (this.decoder.decodeQueueSize > 24) {
-			this.dropping = true;
+		// 解码队列太深说明解码跟不上：请求一个 IDR 并跳过中间的 P 帧，
+		// 用一次很短的停顿换掉持续累积的延迟（队列 6 帧 ≈ 100ms）
+		if (this.decoder.decodeQueueSize > 6) {
+			if (!this.dropping) {
+				this.dropping = true;
+				this.dropEvents++;
+			}
 			this.requestKeyframe();
 			return;
 		}
+
+		// 记下这一帧进浏览器的时刻，解码输出时再减，得到「收到 -> 画出」的耗时。
+		// 只用浏览器自己的时钟，不受 NAS 与电脑时钟误差影响。
+		if (this.recvMap.size > 240) this.recvMap.clear();
+		this.recvMap.set(ts, performance.now());
 
 		try {
 			this.decoder.decode(
@@ -243,6 +272,12 @@ export class VideoPipeline {
 		}
 
 		this.frames++;
+
+		const recvAt = this.recvMap.get(frame.timestamp);
+		if (recvAt !== undefined) {
+			this.processMs = performance.now() - recvAt;
+			this.recvMap.delete(frame.timestamp);
+		}
 
 		if (this.latest) {
 			this.latest.close();
@@ -293,6 +328,9 @@ export class VideoPipeline {
 				queue: this.decoder ? this.decoder.decodeQueueSize : 0,
 				arriveAge: Math.round(this.arriveAge),
 				displayAge: Math.round(this.displayAge),
+				hardware: this.hardware,
+				drops: this.dropEvents,
+				processMs: Math.round(this.processMs),
 			});
 		}
 	}
