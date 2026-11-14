@@ -36,6 +36,10 @@ body {
 	font-size: 15px;
 	line-height: 1.5;
 	overscroll-behavior: none;
+	/* iOS Safari 会忽略 user-scalable=no，双击照样放大页面。
+	   manipulation 关掉双击缩放，同时保留正常滚动/单指手势。 */
+	touch-action: manipulation;
+	-webkit-tap-highlight-color: transparent;
 }
 
 body {
@@ -181,6 +185,8 @@ button.ghost.small {
 
 input {
 	font: inherit;
+	/* iOS 上输入框字号小于 16px 时，聚焦会自动把页面放大 */
+	font-size: 16px;
 	color: var(--text);
 	background: rgba(255, 255, 255, 0.04);
 	border: 1px solid var(--line);

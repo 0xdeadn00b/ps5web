@@ -1526,7 +1526,55 @@ function openKeysHelp() {
 /* 绑定                                                                */
 /* ------------------------------------------------------------------ */
 
+/* ------------------------------------------------------------------ */
+/* 双击缩放防护（iOS Safari）                                           */
+/* ------------------------------------------------------------------ */
+
+// iOS 从 10 开始就忽略 viewport 里的 user-scalable=no，
+// 双击页面任何地方都会把整个页面放大，而且游戏页是 fixed 布局，放大了退不回去。
+// 这里把 320ms 内的第二次轻点吃掉；pointerdown/up 已经先触发过，按键不受影响。
+function bindTapZoomGuard() {
+	let lastAt = 0;
+	let lastX = 0;
+	let lastY = 0;
+
+	// 已经被放大了就别拦，留给系统把页面缩回去，否则会卡在放大状态
+	const zoomed = () => (window.visualViewport?.scale || 1) > 1.01;
+
+	document.addEventListener(
+		'touchend',
+		(e) => {
+			if (e.touches.length > 0) return; // 多指手势不拦
+			const t = e.changedTouches[0];
+			if (!t) return;
+
+			const now = Date.now();
+			const near = Math.hypot(t.clientX - lastX, t.clientY - lastY) < 40;
+			if (now - lastAt < 320 && near && !zoomed()) {
+				e.preventDefault();
+				lastAt = 0;
+				return;
+			}
+			lastAt = now;
+			lastX = t.clientX;
+			lastY = t.clientY;
+		},
+		{ passive: false }
+	);
+
+	// 播放页里连双指缩放也禁掉（Safari 专有事件）
+	document.addEventListener(
+		'gesturestart',
+		(e) => {
+			if (!$('#view-player').classList.contains('hidden') && !zoomed()) e.preventDefault();
+		},
+		{ passive: false }
+	);
+}
+
 function bindStatic() {
+	bindTapZoomGuard();
+
 	$('#login-form').addEventListener('submit', onLoginSubmit);
 
 	$('#btn-logout').addEventListener('click', async () => {

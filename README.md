@@ -4,7 +4,7 @@
 
 底层不是重写的协议栈，而是把 [chiaki-ng](https://github.com/chiaki-ng/chiaki-ng) 的 `libchiaki` 直接编进一个桥接进程，配对、握手、SRTP、FEC 全部复用上游实现，上面再套一层 Web 服务。
 
-> 源码：[github.com/xiaobai9978/ps5web](https://github.com/xiaobai9978/ps5web) · 现成镜像：`docker pull xiaobai9978/ps5web:1.0.7`（[Docker Hub](https://hub.docker.com/r/xiaobai9978/ps5web)）
+> 源码：[github.com/xiaobai9978/ps5web](https://github.com/xiaobai9978/ps5web) · 现成镜像：`docker pull xiaobai9978/ps5web:1.0.8`（[Docker Hub](https://hub.docker.com/r/xiaobai9978/ps5web)）
 > 镜像里**不含任何配对凭据**，凭据只在你自己挂载的 `./data` 里。
 
 ```
@@ -46,6 +46,7 @@
 | **公网只暴露一个 TCP 端口** | 上行带宽决定画质：1080p60 大约需要 18–25 Mbps 稳定上行。 |
 | **浏览器要支持 WebCodecs** | Chrome/Edge 94+、Safari 16.4+、Firefox 130+。老浏览器只能看到提示。 |
 | **iPhone 没有网页全屏** | iOS 上的浏览器（含 iOS 版 Firefox/Chrome，全是 WebKit）不提供 `requestFullscreen`。点右上角 ⛶ 会进入「沉浸模式」；要真正没有地址栏，用「分享 → 添加到主屏幕」，从图标启动（已配好 PWA manifest）。 |
+| **iOS 双击缩放已禁用** | 播放页和首页都拦掉了双击放大（iOS 忽略 `user-scalable=no`）；已经放大时不再拦截，双击/双指仍可缩小。 |
 | **iPhone 不能震动** | iOS 的 WebKit 从没实现 Vibration API，任何浏览器都调不动 iPhone 马达。Android 上会跟着手柄震动；iPhone 上退化成屏幕边缘柔光（可在 ⚙ 里关）。 |
 | **延迟** | 局域网额外 20–50ms；跨公网主要看链路，实测常见 60–120ms。 |
 
@@ -87,7 +88,7 @@ environment:
 
 ```bash
 # 1. 拉镜像（238MB，分层算下来实际下载不到 100MB）
-docker pull xiaobai9978/ps5web:1.0.7
+docker pull xiaobai9978/ps5web:1.0.8
 
 # 2. 起服务（compose 里已经写好 image，另外 network_mode: host 是必须的）
 cd ps5web
@@ -108,7 +109,7 @@ docker compose logs -f ps5web
 docker run -d --name ps5web --network host --restart unless-stopped \
   -e PS5WEB_PASSWORD=你的密码 \
   -v /volume1/docker/ps5web:/data \
-  xiaobai9978/ps5web:1.0.7
+  xiaobai9978/ps5web:1.0.8
 ```
 
 ### 想自己构建
