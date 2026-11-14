@@ -753,6 +753,20 @@ function attachSession() {
 
 	showOverlay('正在接回串流…', '主机不会被重新唤醒，画面应该几秒内就回来。', true);
 	$('#hud-title').textContent = cur.nickname || cur.name || host.name;
+
+	// 接回来但如果 8 秒还没有任何一帧，多半是这个会话已经死了：
+	// 直接告诉用户怎么脱身，别让人对着黑屏发呆
+	clearTimeout(state.attachTimer);
+	state.attachTimer = setTimeout(() => {
+		if (state.session?.state !== 'streaming') return;
+		if (state.lastVideoAt && performance.now() - state.lastVideoAt < 5000) return;
+		showOverlay(
+			'接回来了，但没有画面',
+			'这个会话可能已经断了。点下面的按钮结束它，再回上一页重新开始串流。',
+			false
+		);
+		$('#btn-overlay-cancel').textContent = '结束这个会话';
+	}, 8000);
 }
 
 /* ------------------------------------------------------------------ */
@@ -1310,57 +1324,60 @@ function makeTrigger(label, which, style) {
 	return el;
 }
 
+// 现代手游那种浮动摇杆：按下时摇杆整体挪到手指位置，
+// 手指就是不动点，往哪个方向拉就往哪走。松手弹回原位。
 function makeStick(which, style) {
 	const knob = h('div', { class: 'tb-knob' });
 	const el = h('div', { class: 'tb tb-stick', style }, [knob]);
+	return { side: which, el, knob, active: false, pointerId: null, baseX: 0, baseY: 0 };
+}
 
-	let activeId = null;
+function stickBegin(stick, pointerId, clientX, clientY) {
+	stick.el.style.transform = '';
+	const rect = stick.el.getBoundingClientRect();
+	const w = rect.width || 100;
 
-	const update = (e) => {
-		const rect = el.getBoundingClientRect();
-		// 半径跟着摇杆尺寸走，布局调大调小都跟手
-		const radius = Math.max(30, rect.width * 0.36);
-		const cx = rect.left + rect.width / 2;
-		const cy = rect.top + rect.height / 2;
-		let dx = e.clientX - cx;
-		let dy = e.clientY - cy;
-		const dist = Math.hypot(dx, dy);
-		if (dist > radius) {
-			dx = (dx / dist) * radius;
-			dy = (dy / dist) * radius;
-		}
-		knob.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
-		state.input?.setStick(which, dx / radius, dy / radius);
-	};
+	// 夹在屏幕内，别让底座跑出去一半
+	const m = w * 0.5;
+	const bx = Math.min(window.innerWidth - m, Math.max(m, clientX));
+	const by = Math.min(window.innerHeight - m, Math.max(m, clientY));
 
-	el.addEventListener('pointerdown', (e) => {
-		e.preventDefault();
-		e.stopPropagation();
-		activeId = e.pointerId;
-		el.setPointerCapture(e.pointerId);
-		el.classList.add('active');
-		update(e);
-	});
+	const homeX = rect.left + w / 2;
+	const homeY = rect.top + rect.height / 2;
 
-	el.addEventListener('pointermove', (e) => {
-		if (e.pointerId !== activeId) return;
-		e.preventDefault();
-		update(e);
-	});
+	stick.active = true;
+	stick.pointerId = pointerId;
+	stick.baseX = bx;
+	stick.baseY = by;
+	stick.el.style.transform = `translate(${bx - homeX}px, ${by - homeY}px)`;
+	stick.el.classList.add('active');
+	stickMove(stick, bx, by);
+}
 
-	const end = (e) => {
-		if (e.pointerId !== activeId) return;
-		activeId = null;
-		el.classList.remove('active');
-		knob.style.transform = 'translate(-50%, -50%)';
-		state.input?.setStick(which, 0, 0);
-	};
+function stickMove(stick, clientX, clientY) {
+	const rect = stick.el.getBoundingClientRect();
+	const radius = Math.max(30, (rect.width || 100) * 0.36);
 
-	el.addEventListener('pointerup', end);
-	el.addEventListener('pointercancel', end);
-	el.addEventListener('lostpointercapture', end);
+	let dx = clientX - stick.baseX;
+	let dy = clientY - stick.baseY;
+	const dist = Math.hypot(dx, dy);
+	if (dist > radius) {
+		dx = (dx / dist) * radius;
+		dy = (dy / dist) * radius;
+	}
 
-	return el;
+	stick.knob.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
+	state.input?.setStick(stick.side, dx / radius, dy / radius);
+}
+
+function stickEnd(stick) {
+	if (!stick || !stick.active) return;
+	stick.active = false;
+	stick.pointerId = null;
+	stick.el.classList.remove('active');
+	stick.el.style.transform = '';
+	stick.knob.style.transform = 'translate(-50%, -50%)';
+	state.input?.setStick(stick.side, 0, 0);
 }
 
 /* ---------------------------- 震动 ---------------------------- */
@@ -1648,7 +1665,10 @@ function bindTapZoomGuard() {
 		};
 		vv.addEventListener('resize', sync);
 		vv.addEventListener('scroll', sync);
+		window.addEventListener('pageshow', sync);
 		sync();
+		// iOS 有时候要等布局稳定才更新 scale，多点几次没坏处
+		for (const ms of [200, 600, 1500, 3000]) setTimeout(sync, ms);
 	}
 }
 

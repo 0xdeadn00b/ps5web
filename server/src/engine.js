@@ -27,6 +27,7 @@ class Engine extends EventEmitter {
 		this.current = null; // { hostId, name, nickname }
 		this.discovered = [];
 		this.audioFormat = null;
+		this.lastParams = null; // 最近一包 SPS/PPS，中途接入时补发
 		this.lastError = null;
 
 		this.pendingDiscover = null;
@@ -67,6 +68,20 @@ class Engine extends EventEmitter {
 				config: config.video,
 			})
 		);
+
+		// 中途接入（刷新页面后点「继续接入」）：先把缓存的 SPS/PPS 发过去，
+		// 再要一个 IDR，浏览器才能立刻起解码器，不用等下一帧自然关键帧
+		if (this.state === 'streaming') {
+			if (this.lastParams) {
+				try {
+					conn.send(this.#frameVideo(this.lastParams));
+				} catch {
+					/* ignore */
+				}
+			}
+			this.requestIdr();
+		}
+
 		this.broadcastJson({ t: 'viewers', count: this.viewers.size });
 	}
 
@@ -191,6 +206,7 @@ class Engine extends EventEmitter {
 
 		this.current = { hostId: host.id, name: host.name };
 		this.audioFormat = null;
+		this.lastParams = null;
 		this.lastError = null;
 		this.#setState('connecting');
 
@@ -435,18 +451,29 @@ class Engine extends EventEmitter {
 		}
 	}
 
+	// [0x10][8 字节 Date.now()][桥接层的帧数据]
+	// 那个时间戳让浏览器能算出「这一帧从 NAS 收到算起，到我手里花了多久」
+	#frameVideo(payload) {
+		const msg = Buffer.allocUnsafe(payload.length + 9);
+		msg[0] = OP_VIDEO;
+		msg.writeBigUInt64BE(BigInt(Date.now()), 1);
+		payload.copy(msg, 9);
+		return msg;
+	}
+
 	#onVideo(payload) {
+		// 桥接层的帧头是 [8 字节时间戳][1 字节 flags]，flags & 0x02 = 参数集
+		// 中途接入的观看者如果拿不到这一包，解码器就永远配不上，表现是黑屏
+		if (payload.length > 9 && (payload[8] & 0x02)) {
+			this.lastParams = Buffer.from(payload);
+		}
+
 		if (!this.viewers.size) return;
 
 		this.stats.frames++;
 		this.stats.bytes += payload.length;
 
-		// [0x10][8 字节 Date.now()][桥接层的帧数据]
-		// 那个时间戳让浏览器能算出「这一帧从 NAS 收到算起，到我手里花了多久」
-		const msg = Buffer.allocUnsafe(payload.length + 9);
-		msg[0] = OP_VIDEO;
-		msg.writeBigUInt64BE(BigInt(Date.now()), 1);
-		payload.copy(msg, 9);
+		const msg = this.#frameVideo(payload);
 
 		for (const v of this.viewers) {
 			if (v.bufferedAmount > VIEWER_DROP_BUFFER) continue;
