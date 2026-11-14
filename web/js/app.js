@@ -785,6 +785,17 @@ function preparePlayer() {
 			state.lastVideoStats = { fps, queue, arriveAge, displayAge, hardware, drops };
 			state.lastVideoAt = performance.now();
 			updateHudStats();
+
+			// 画面比例变了要重算竖屏下的布局（stage 高度 = 屏高 - 画面高）
+			const v = state.video;
+			if (v?.width && v?.height) {
+				const aspect = v.width / v.height;
+				if (Math.abs(aspect - (state.videoAspect || 0)) > 0.001) {
+					state.videoAspect = aspect;
+					document.documentElement.style.setProperty('--video-aspect', String(aspect));
+					updatePadZone();
+				}
+			}
 		},
 	});
 
@@ -822,7 +833,12 @@ function preparePlayer() {
 	if (!state.stageBound) {
 		bindStageGestures(canvas);
 		state.stageBound = true;
+
+		window.addEventListener('resize', updatePadZone);
+		window.addEventListener('orientationchange', () => setTimeout(updatePadZone, 250));
 	}
+
+	updatePadZone();
 
 	$('#hud').classList.remove('dim');
 	pulseHud();
@@ -1083,6 +1099,7 @@ function cleanupPlayer() {
 
 function bindStageGestures(canvas) {
 	const stage = $('#stage');
+	const surface = $('#view-player'); // 手势层要覆盖整屏：竖屏时按键在下半屏
 	const active = new Map(); // pointerId -> 本次按下的状态（支持双手同时操作）
 	let padTapTimer = 0;
 
@@ -1113,17 +1130,33 @@ function bindStageGestures(canvas) {
 		const ny = (clientY - rect.top) / rect.height;
 
 		const uiHidden = $('#touch-ui').classList.contains('hidden');
-		if (!uiHidden && ny > 0.42) {
-			if (nx < 0.34) return 'left';
-			if (nx > 0.66) return 'right';
+		const portrait = rect.height > rect.width;
+
+		if (!uiHidden) {
+			if (portrait) {
+				// 竖屏：下半屏左右两侧给摇杆，上半屏是画面
+				if (ny > 0.5 && nx < 0.36) return 'left';
+				if (ny > 0.5 && nx > 0.64) return 'right';
+			} else {
+				if (ny > 0.42 && nx < 0.34) return 'left';
+				if (ny > 0.42 && nx > 0.66) return 'right';
+			}
 		}
+
+		if (portrait) {
+			// 竖屏：落在画面范围内才算触摸板
+			return toTouchpad(clientX, clientY) ? 'pad' : 'none';
+		}
+
 		if (nx >= 0.34 && nx <= 0.66 && ny >= 0.28 && ny <= 0.72) return 'pad';
 		return 'none';
 	};
 
-	canvas.addEventListener('pointerdown', (e) => {
+	surface.addEventListener('pointerdown', (e) => {
 		if (e.pointerType === 'mouse' && e.button !== 0) return;
-		canvas.setPointerCapture(e.pointerId);
+		// 顶栏、弹窗、按钮上的点击不算手势
+		if (e.target.closest && e.target.closest('button, .hud, .overlay, .modal-backdrop, input, select')) return;
+		surface.setPointerCapture(e.pointerId);
 
 		const rec = {
 			kind: zoneOf(e.clientX, e.clientY),
@@ -1159,7 +1192,7 @@ function bindStageGestures(canvas) {
 		}
 	});
 
-	canvas.addEventListener('pointermove', (e) => {
+	surface.addEventListener('pointermove', (e) => {
 		const rec = active.get(e.pointerId);
 		if (!rec) return;
 
@@ -1216,8 +1249,8 @@ function bindStageGestures(canvas) {
 		$('#stage').dataset.hudHidden = $('#hud').classList.contains('dim') ? '1' : '';
 	};
 
-	canvas.addEventListener('pointerup', end);
-	canvas.addEventListener('pointercancel', end);
+	surface.addEventListener('pointerup', end);
+	surface.addEventListener('pointercancel', end);
 
 	stage.addEventListener('pointermove', () => pulseHud());
 }
@@ -1416,6 +1449,38 @@ function phoneRumble(left, right) {
 	glowTimer = setTimeout(() => {
 		glow.style.opacity = '0';
 	}, 110);
+}
+
+/* ---------------------------- 触摸板提示框 ---------------------------- */
+
+// 竖屏时画面在上半屏，虚线框要正好贴在画面上；横屏是固定居中的 32%×44%
+function updatePadZone() {
+	const zone = $('#pad-zone');
+	const surface = $('#view-player');
+	const canvas = $('#screen');
+	if (!zone || !surface || !canvas) return;
+
+	const sr = surface.getBoundingClientRect();
+	if (sr.height <= sr.width) {
+		zone.style.left = '50%';
+		zone.style.top = '50%';
+		zone.style.width = '32%';
+		zone.style.height = '44%';
+		zone.style.transform = 'translate(-50%, -50%)';
+		return;
+	}
+
+	const rect = canvas.getBoundingClientRect();
+	if (!canvas.width || !canvas.height || !rect.width) return;
+	const scale = Math.min(rect.width / canvas.width, rect.height / canvas.height);
+	const w = canvas.width * scale;
+	const h = canvas.height * scale;
+
+	zone.style.left = `${rect.left - sr.left + (rect.width - w) / 2}px`;
+	zone.style.top = `${rect.top - sr.top + (rect.height - h) / 2}px`;
+	zone.style.width = `${w}px`;
+	zone.style.height = `${h}px`;
+	zone.style.transform = 'none';
 }
 
 /* ---------------------------- 全屏 ---------------------------- */

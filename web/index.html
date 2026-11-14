@@ -95,9 +95,6 @@
 <section id="view-player" class="view hidden">
 	<div class="stage" id="stage">
 		<canvas id="screen"></canvas>
-		<div class="rumble-glow" id="rumble-glow"></div>
-		<div class="pad-zone" id="pad-zone"><span>滑动＝滑动触摸板 · 轻点＝按下</span></div>
-		<div class="touch-ui hidden" id="touch-ui"></div>
 
 		<div class="hud" id="hud">
 			<div class="hud-left">
@@ -115,20 +112,25 @@
 				<button class="icon-btn danger" id="btn-stop" type="button" title="结束串流">✕</button>
 			</div>
 		</div>
+	</div>
 
-		<div class="overlay" id="player-overlay">
-			<div class="overlay-card">
-				<div class="spinner"></div>
-				<h3 id="overlay-title">正在连接 PS5…</h3>
-				<p class="muted" id="overlay-text">如果主机在待机，请先点「唤醒」。</p>
-				<div class="row gap center">
-					<button class="ghost" id="btn-overlay-cancel" type="button">取消</button>
-				</div>
+	<!-- 整屏覆盖层：竖屏时画面在上半屏、按键在下半屏，所以这些元素不能放进 .stage -->
+	<div class="rumble-glow" id="rumble-glow"></div>
+	<div class="pad-zone" id="pad-zone"><span>滑动＝滑动触摸板 · 轻点＝按下</span></div>
+	<div class="touch-ui hidden" id="touch-ui"></div>
+
+	<div class="overlay" id="player-overlay">
+		<div class="overlay-card">
+			<div class="spinner"></div>
+			<h3 id="overlay-title">正在连接 PS5…</h3>
+			<p class="muted" id="overlay-text">如果主机在待机，请先点「唤醒」。</p>
+			<div class="row gap center">
+				<button class="ghost" id="btn-overlay-cancel" type="button">取消</button>
 			</div>
 		</div>
-
-		<button class="audio-unlock hidden" id="audio-unlock" type="button">点击启用声音</button>
 	</div>
+
+	<button class="audio-unlock hidden" id="audio-unlock" type="button">点击启用声音</button>
 </section>
 
 <div id="modal-root"></div>

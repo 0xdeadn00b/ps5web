@@ -514,6 +514,16 @@ option {
 	background: #000;
 }
 
+/* 竖屏 / 折叠屏：画面留在上半屏，下边缘正好卡在屏幕中线
+   画面本身仍然居中于 .stage，所以 stage 高度取「屏高 - 画面高度」——
+   这样画面垂直居中的结果就是底边落在 50% 处，下半屏整块留给按键 */
+@media (orientation: portrait) {
+	.stage {
+		flex: none;
+		height: max(30%, calc(100% - 100vw / var(--video-aspect, 1.7778)));
+	}
+}
+
 #screen {
 	width: 100%;
 	height: 100%;
