@@ -715,8 +715,8 @@ body.immersive .insecure-banner {
 	left: 50%;
 	top: 50%;
 	transform: translate(-50%, -50%);
-	width: 62%;
-	height: 64%;
+	width: 32%;
+	height: 44%;
 	border: 1px dashed rgba(255, 255, 255, 0.22);
 	border-radius: 20px;
 	pointer-events: none;
@@ -899,12 +899,21 @@ body.immersive .insecure-banner {
 	bottom: auto;
 }
 
+/* 摇杆只是「视觉」，真正的手势由 canvas 统一处理，
+   这样手指可以在整块下半屏按下去，摇杆跟过去 */
 .tb-stick {
 	width: var(--stick);
 	height: var(--stick);
 	border-radius: 50%;
 	background: rgba(20, 28, 40, 0.32);
 	border: 1px solid rgba(255, 255, 255, 0.18);
+	pointer-events: none;
+	transition: background 0.08s, opacity 0.12s;
+}
+
+.tb-stick.active {
+	background: rgba(46, 139, 255, 0.2);
+	border-color: rgba(90, 168, 255, 0.55);
 }
 
 .tb-knob {

@@ -1069,15 +1069,8 @@ function cleanupPlayer() {
 
 function bindStageGestures(canvas) {
 	const stage = $('#stage');
-	let pointerId = null;
-	let startX = 0;
-	let startY = 0;
-	let moving = false;
-	let wasDim = false;
-	let inZone = false;
-	let touching = false; // 手指正按在触摸板上（只是触摸，不等于按下）
-	let tapTimer = 0;
-	let touchStartAt = 0;
+	const active = new Map(); // pointerId -> 本次按下的状态（支持双手同时操作）
+	let padTapTimer = 0;
 
 	const toTouchpad = (clientX, clientY) => {
 		const rect = canvas.getBoundingClientRect();
@@ -1095,85 +1088,113 @@ function bindStageGestures(canvas) {
 		return { x: x * 1919, y: y * 1079 };
 	};
 
-	// 触摸板只认屏幕正中间那一块（62% 宽 / 64% 高），
-	// 边缘留给屏幕按键和普通点按，避免蹭到就误触发触摸板
-	const inPadZone = (clientX, clientY) => {
+	// 区域划分（相对画面归一化坐标）：
+	//   下半屏左右两侧 = 左右摇杆（浮动，按到哪就以哪为中心）
+	//   中间 32%x44%   = 触摸板，避开十字键和面板键
+	//   其余（主要是顶部）= 轻点切换顶栏
+	const zoneOf = (clientX, clientY) => {
 		const rect = canvas.getBoundingClientRect();
-		if (!rect.width || !rect.height) return false;
+		if (!rect.width || !rect.height) return 'none';
 		const nx = (clientX - rect.left) / rect.width;
 		const ny = (clientY - rect.top) / rect.height;
-		return nx > 0.19 && nx < 0.81 && ny > 0.18 && ny < 0.82;
+
+		const uiHidden = $('#touch-ui').classList.contains('hidden');
+		if (!uiHidden && ny > 0.42) {
+			if (nx < 0.34) return 'left';
+			if (nx > 0.66) return 'right';
+		}
+		if (nx >= 0.34 && nx <= 0.66 && ny >= 0.28 && ny <= 0.72) return 'pad';
+		return 'none';
 	};
 
 	canvas.addEventListener('pointerdown', (e) => {
 		if (e.pointerType === 'mouse' && e.button !== 0) return;
-		pointerId = e.pointerId;
-		startX = e.clientX;
-		startY = e.clientY;
-		moving = false;
-		inZone = inPadZone(e.clientX, e.clientY);
-		// 记下按下去之前 HUD 是显示还是隐藏的。
-		// 以前是在 pointerdown 里先 pulseHud() 显示，pointerup 又 toggle 一次，
-		// 结果轻点一下反而是「闪一下又消失」，只有按住拖一下才能留住。
-		wasDim = $('#hud').classList.contains('dim');
 		canvas.setPointerCapture(e.pointerId);
+
+		const rec = {
+			kind: zoneOf(e.clientX, e.clientY),
+			startX: e.clientX,
+			startY: e.clientY,
+			startAt: performance.now(),
+			moved: false,
+			wasDim: $('#hud').classList.contains('dim'),
+		};
+		active.set(e.pointerId, rec);
 		pulseHud();
 
-		// 中间区域：手指落下去就是「摸到触摸板」，只上报触摸点，不按下。
-		// 上滑/下滑就是真机上的「在触摸板上滑」，松手才算结束。
-		clearTimeout(tapTimer);
-		if (inZone) {
+		if (rec.kind === 'left' || rec.kind === 'right') {
+			const stick = state.sticks?.[rec.kind];
+			if (stick && !stick.active) {
+				rec.stick = rec.kind;
+				stickBegin(stick, e.pointerId, e.clientX, e.clientY);
+			} else {
+				rec.kind = 'dead'; // 这根摇杆已经被另一只手占了
+			}
+			return;
+		}
+
+		if (rec.kind === 'pad') {
 			const p = toTouchpad(e.clientX, e.clientY);
 			if (p) {
-				touching = true;
-				touchStartAt = performance.now();
+				rec.touching = true;
 				state.input?.setTouch(0, p.x, p.y, true);
 				$('#pad-zone').classList.add('on');
+			} else {
+				rec.kind = 'dead';
 			}
 		}
 	});
 
 	canvas.addEventListener('pointermove', (e) => {
-		if (e.pointerId !== pointerId) return;
-		const dx = e.clientX - startX;
-		const dy = e.clientY - startY;
+		const rec = active.get(e.pointerId);
+		if (!rec) return;
 
-		// 超过 10px 就算滑动，滑动期间绝不按下触摸板
-		if (!moving && Math.hypot(dx, dy) > 10) moving = true;
+		if (!rec.moved && Math.hypot(e.clientX - rec.startX, e.clientY - rec.startY) > 10) rec.moved = true;
 
-		if (touching) {
+		if (rec.stick) {
+			stickMove(state.sticks[rec.stick], e.clientX, e.clientY);
+			return;
+		}
+
+		if (rec.touching) {
 			const p = toTouchpad(e.clientX, e.clientY);
 			if (p) state.input?.setTouch(0, p.x, p.y, true);
 		}
 	});
 
 	const end = (e) => {
-		if (e.pointerId !== pointerId) return;
-		pointerId = null;
+		const rec = active.get(e.pointerId);
+		if (!rec) return;
+		active.delete(e.pointerId);
 
-		if (touching) {
-			touching = false;
+		if (rec.stick) {
+			stickEnd(state.sticks[rec.stick]);
+			return;
+		}
+
+		if (rec.touching) {
 			$('#pad-zone').classList.remove('on');
+			const held = performance.now() - rec.startAt;
 
-			const held = performance.now() - touchStartAt;
-			if (moving || held > 400) {
-				// 滑动、或者按住不放再松开：都只算触摸结束，不产生「按下」
+			if (rec.moved || held > 400) {
+				// 滑动 / 长按松开：只结束触摸，不按下
 				state.input?.clearTouches();
 			} else {
-				// 轻点中间 = 按下触摸板（PS5 的 pad click），按住 60ms 再松开
-				clearTimeout(tapTimer);
+				// 轻点中间 = 按下触摸板
+				clearTimeout(padTapTimer);
 				state.input?.setButton(BTN.TOUCHPAD, true);
-				tapTimer = setTimeout(() => {
+				padTapTimer = setTimeout(() => {
 					state.input?.setButton(BTN.TOUCHPAD, false);
 					state.input?.clearTouches();
 				}, 60);
 			}
-			moving = false;
 			return;
 		}
 
-		// 中间区域以外：原本隐藏的 → 显示出来并保持 3 秒；原本显示的 → 收起来
-		if (wasDim) {
+		if (rec.kind === 'dead' || rec.moved) return;
+
+		// 其余区域：原本隐藏的 → 显示出来并保持 3 秒；原本显示的 → 收起来
+		if (rec.wasDim) {
 			pulseHud();
 		} else {
 			$('#hud').classList.add('dim');
@@ -1439,8 +1460,10 @@ function buildTouchUI() {
 	const ui = $('#touch-ui');
 	ui.innerHTML = '';
 
-	ui.append(makeStick('left', 'left:var(--inset-x);bottom:var(--inset-y);'));
-	ui.append(makeStick('right', 'right:var(--inset-x);bottom:var(--inset-y);'));
+	const leftStick = makeStick('left', 'left:var(--inset-x);bottom:var(--inset-y);');
+	const rightStick = makeStick('right', 'right:var(--inset-x);bottom:var(--inset-y);');
+	state.sticks = { left: leftStick, right: rightStick };
+	ui.append(leftStick.el, rightStick.el);
 
 	// 十字键：在左摇杆正上方
 	const dpad = h('div', { class: 'pad-dpad' });
