@@ -1580,11 +1580,11 @@ function buildTouchUI() {
 		style:
 			'position:absolute;left:50%;transform:translateX(-50%);bottom:calc(var(--inset-y) + 2px);display:flex;gap:8px;pointer-events:auto;max-width:56vw;flex-wrap:wrap;justify-content:center;',
 	});
+	// 顺序按手柄：分享 - PS - 选项；触摸板不在这里（点画面中间就是按下触摸板）
 	center.append(
-		makeButton('PS', BTN.PS, '', true, 'tb-inline'),
-		makeButton('选项', BTN.OPTIONS, '', true, 'tb-inline'),
 		makeButton('分享', BTN.SHARE, '', true, 'tb-inline'),
-		makeButton('触摸板', BTN.TOUCHPAD, '', true, 'tb-inline')
+		makeButton('PS', BTN.PS, '', true, 'tb-inline'),
+		makeButton('选项', BTN.OPTIONS, '', true, 'tb-inline')
 	);
 	ui.append(center);
 
