@@ -21,9 +21,46 @@ const state = {
 	hudTimer: null,
 	touchUiBuilt: false,
 	touchVisible: false,
+	layout: null,
 	logsTimer: null,
 	logCursor: 0,
+	lastVideoAt: 0,
+	stallTimer: null,
 };
+
+/* ---------------------------- 按键布局 ---------------------------- */
+
+const LAYOUT_KEY = 'ps5web.layout';
+const LAYOUT_DEFAULT = { ctl: 1, inset: 1, dpad: true };
+
+function loadLayout() {
+	try {
+		const raw = JSON.parse(localStorage.getItem(LAYOUT_KEY) || '{}');
+		return { ...LAYOUT_DEFAULT, ...(raw && typeof raw === 'object' ? raw : {}) };
+	} catch {
+		return { ...LAYOUT_DEFAULT };
+	}
+}
+
+function applyLayout() {
+	const ui = document.querySelector('#touch-ui');
+	if (!ui || !state.layout) return;
+	ui.style.setProperty('--ctl-scale', String(state.layout.ctl));
+	ui.style.setProperty('--inset-scale', String(state.layout.inset));
+	ui.classList.toggle('hide-dpad', !state.layout.dpad);
+}
+
+function saveLayout(patch) {
+	state.layout = { ...state.layout, ...patch };
+	try {
+		localStorage.setItem(LAYOUT_KEY, JSON.stringify(state.layout));
+	} catch {
+		/* 隐私模式下 localStorage 会抛错，忽略 */
+	}
+	applyLayout();
+}
+
+state.layout = loadLayout();
 
 /* ------------------------------------------------------------------ */
 /* 小工具                                                              */
@@ -199,6 +236,12 @@ async function refreshState() {
 	state.session = s.session || { state: 'idle' };
 	updateStatusPill();
 	renderHosts();
+	updateResumeBar();
+}
+
+function updateResumeBar() {
+	const busy = state.session?.state === 'streaming' || state.session?.state === 'connecting';
+	$('#resume-bar').classList.toggle('hidden', !busy);
 }
 
 function renderHosts() {
@@ -524,6 +567,64 @@ function openStartDialog(host) {
 	});
 }
 
+/* ---------------------------- 按键布局 ---------------------------- */
+
+function openLayoutDialog() {
+	const size = chipGroup(
+		[
+			{ value: 0.85, label: '小' },
+			{ value: 1, label: '标准' },
+			{ value: 1.2, label: '大' },
+		],
+		state.layout.ctl
+	);
+	const inset = chipGroup(
+		[
+			{ value: 0.7, label: '靠边' },
+			{ value: 1, label: '适中' },
+			{ value: 1.4, label: '靠里' },
+		],
+		state.layout.inset
+	);
+	const dpad = chipGroup(
+		[
+			{ value: 'on', label: '显示' },
+			{ value: 'off', label: '隐藏' },
+		],
+		state.layout.dpad ? 'on' : 'off'
+	);
+
+	// 点一下立刻生效，边看边调
+	size.addEventListener('click', () => saveLayout({ ctl: Number(size.value) }));
+	inset.addEventListener('click', () => saveLayout({ inset: Number(inset.value) }));
+	dpad.addEventListener('click', () => saveLayout({ dpad: dpad.value === 'on' }));
+
+	const body = h('div', {}, [
+		h('p', {
+			class: 'muted',
+			text: '改完立刻生效，只存在这台设备上。摇杆在下方，十字键和面板键在各自摇杆的正上方。',
+		}),
+		h('div', { class: 'quality-row' }, [h('span', { text: '按键大小' }), size]),
+		h('div', { class: 'quality-row' }, [h('span', { text: '离边距离' }), inset]),
+		h('div', { class: 'quality-row' }, [h('span', { text: '十字键' }), dpad]),
+		h('button', {
+			class: 'ghost',
+			type: 'button',
+			text: '恢复默认',
+			onclick: () => {
+				saveLayout({ ...LAYOUT_DEFAULT });
+				toast('已恢复默认布局');
+			},
+		}),
+	]);
+
+	openModal({
+		title: '按键布局',
+		body,
+		actions: [{ label: '完成', primary: true, value: true }],
+	});
+}
+
 async function startSession(host, opts) {
 	state.currentHost = host;
 
@@ -542,9 +643,63 @@ async function startSession(host, opts) {
 		const res = await api.start({ hostId: host.id, ...opts });
 		if (res?.session) state.session = res.session;
 	} catch (err) {
+		if (err.status === 409) {
+			// 多半是刚刷新过页面：NAS 上的会话还在，直接接回去比重新开一个快得多
+			await refreshState().catch(() => {});
+			showOverlay('NAS 上已有会话', '选「接入」继续这个会话，或「结束旧的重开」。', false);
+			openModal({
+				title: 'NAS 上已有串流',
+				body: '可能是另一个标签页／设备，也可能是你刚刷新过页面。直接接入可以继续用同一个会话，不需要重新唤醒 PS5。',
+				actions: [
+					{ label: '取消', value: false },
+					{
+						label: '结束旧的重开',
+						onClick: async () => {
+							await api.stop().catch(() => {});
+							await refreshState().catch(() => {});
+							startSession(host, opts);
+							return true;
+						},
+					},
+					{
+						label: '接入',
+						primary: true,
+						onClick: () => {
+							attachSession();
+							return true;
+						},
+					},
+				],
+			});
+			return;
+		}
+
 		toast(err.message, 'error', 6000);
 		showOverlay('无法开始串流', err.message, false);
 	}
+}
+
+// 接回 NAS 上还在跑的会话：不调用 start，只是让浏览器作为观看者接上
+function attachSession() {
+	const cur = state.session?.current || {};
+	const host =
+		state.hosts.find((x) => x.id === cur.hostId) ||
+		state.hosts.find((x) => x.name === cur.name) ||
+		state.hosts[0] ||
+		{ id: cur.hostId, name: cur.name || 'PS5' };
+
+	state.currentHost = host;
+	$('#resume-bar').classList.add('hidden');
+
+	showView('player');
+	preparePlayer();
+
+	state.audio.enable().then((ok) => {
+		if (!ok) toast('浏览器不支持 WebCodecs 音频解码，本次没有声音', 'error', 5000);
+	});
+
+	showOverlay('正在接回串流…', '主机不会被重新唤醒，画面应该几秒内就回来。', true);
+	$('#hud-title').textContent = cur.nickname || cur.name || host.name;
 }
 
 /* ------------------------------------------------------------------ */
@@ -561,6 +716,7 @@ function preparePlayer() {
 		},
 		onStats: ({ fps, queue, arriveAge, displayAge, hardware, drops }) => {
 			state.lastVideoStats = { fps, queue, arriveAge, displayAge, hardware, drops };
+			state.lastVideoAt = performance.now();
 			updateHudStats();
 		},
 	});
@@ -621,6 +777,10 @@ function onServerMessage(msg) {
 			if (msg.current) $('#hud-title').textContent = msg.current.nickname || msg.current.name;
 			if (msg.audio) state.audio?.configure(msg.audio);
 			if (msg.state === 'streaming') hideOverlay();
+			else if (msg.state === 'idle') {
+				// 接回来的时候会话其实已经结束了
+				showOverlay('这个会话已经结束了', '回上一页点「开始串流」重新连一次。', false);
+			}
 			state.session = { state: msg.state, current: msg.current };
 			updateStatusPill();
 			break;
@@ -823,7 +983,10 @@ async function stopSession() {
 
 function cleanupPlayer() {
 	clearInterval(state.pingTimer);
+	clearInterval(state.stallTimer);
 	state.pingTimer = null;
+	state.stallTimer = null;
+	state.lastVideoAt = 0;
 	state.rtt = 0;
 
 	state.socket?.close();
@@ -856,6 +1019,7 @@ function bindStageGestures(canvas) {
 	let startX = 0;
 	let startY = 0;
 	let moving = false;
+	let wasDim = false;
 
 	const toTouchpad = (clientX, clientY) => {
 		const rect = canvas.getBoundingClientRect();
@@ -879,6 +1043,10 @@ function bindStageGestures(canvas) {
 		startX = e.clientX;
 		startY = e.clientY;
 		moving = false;
+		// 记下按下去之前 HUD 是显示还是隐藏的。
+		// 以前是在 pointerdown 里先 pulseHud() 显示，pointerup 又 toggle 一次，
+		// 结果轻点一下反而是「闪一下又消失」，只有按住拖一下才能留住。
+		wasDim = $('#hud').classList.contains('dim');
 		canvas.setPointerCapture(e.pointerId);
 		pulseHud();
 	});
@@ -910,10 +1078,13 @@ function bindStageGestures(canvas) {
 			return;
 		}
 
-		// 单击：切换 HUD
-		const stageEl = $('#stage');
-		$('#hud').classList.toggle('dim');
-		stageEl.dataset.hudHidden = $('#hud').classList.contains('dim') ? '1' : '';
+		// 单击：原本隐藏的 → 显示出来并保持 3 秒；原本显示的 → 收起来
+		if (wasDim) {
+			pulseHud();
+		} else {
+			$('#hud').classList.add('dim');
+		}
+		$('#stage').dataset.hudHidden = $('#hud').classList.contains('dim') ? '1' : '';
 	};
 
 	canvas.addEventListener('pointerup', end);
@@ -1029,10 +1200,11 @@ function makeStick(which, style) {
 	const el = h('div', { class: 'tb tb-stick', style }, [knob]);
 
 	let activeId = null;
-	const radius = 44;
 
 	const update = (e) => {
 		const rect = el.getBoundingClientRect();
+		// 半径跟着摇杆尺寸走，布局调大调小都跟手
+		const radius = Math.max(30, rect.width * 0.36);
 		const cx = rect.left + rect.width / 2;
 		const cy = rect.top + rect.height / 2;
 		let dx = e.clientX - cx;
@@ -1135,8 +1307,18 @@ function buildTouchUI() {
 	const ui = $('#touch-ui');
 	ui.innerHTML = '';
 
-	ui.append(makeStick('left', 'left:14px;bottom:14px;'));
-	ui.append(makeStick('right', 'right:14px;bottom:14px;'));
+	ui.append(makeStick('left', 'left:var(--inset-x);bottom:var(--inset-y);'));
+	ui.append(makeStick('right', 'right:var(--inset-x);bottom:var(--inset-y);'));
+
+	// 十字键：在左摇杆正上方
+	const dpad = h('div', { class: 'pad-dpad' });
+	dpad.append(
+		makeButton('▲', BTN.DPAD_UP, '', false, 'd-u'),
+		makeButton('◀', BTN.DPAD_LEFT, '', false, 'd-l'),
+		makeButton('▶', BTN.DPAD_RIGHT, '', false, 'd-r'),
+		makeButton('▼', BTN.DPAD_DOWN, '', false, 'd-d')
+	);
+	ui.append(dpad);
 
 	// 面板键：九宫格摆成十字，和手柄一致 —— △上 ○右 ✕下 □左
 	const face = h('div', { class: 'pad-face' });
@@ -1150,16 +1332,16 @@ function buildTouchUI() {
 
 	// 肩键
 	ui.append(
-		makeTrigger('L2', 'l2', 'left:14px;top:74px;'),
-		makeShoulder('L1', BTN.L1, 'left:96px;top:74px;'),
-		makeShoulder('R1', BTN.R1, 'right:96px;top:74px;'),
-		makeTrigger('R2', 'r2', 'right:14px;top:74px;')
+		makeTrigger('L2', 'l2', 'left:var(--inset-x);top:74px;'),
+		makeShoulder('L1', BTN.L1, 'left:calc(var(--inset-x) + 78px);top:74px;'),
+		makeShoulder('R1', BTN.R1, 'right:calc(var(--inset-x) + 78px);top:74px;'),
+		makeTrigger('R2', 'r2', 'right:var(--inset-x);top:74px;')
 	);
 
 	// 中间的功能键
 	const center = h('div', {
 		style:
-			'position:absolute;left:50%;transform:translateX(-50%);bottom:16px;display:flex;gap:8px;pointer-events:auto;',
+			'position:absolute;left:50%;transform:translateX(-50%);bottom:calc(var(--inset-y) + 2px);display:flex;gap:8px;pointer-events:auto;max-width:56vw;flex-wrap:wrap;justify-content:center;',
 	});
 	center.append(
 		makeButton('PS', BTN.PS, '', true, 'tb-inline'),
@@ -1168,6 +1350,8 @@ function buildTouchUI() {
 		makeButton('触摸板', BTN.TOUCHPAD, '', true, 'tb-inline')
 	);
 	ui.append(center);
+
+	applyLayout();
 }
 
 function setTouchVisible(visible) {
@@ -1268,6 +1452,20 @@ function bindStatic() {
 		toast(state.touchVisible ? '屏幕按键已开启' : '屏幕按键已关闭');
 	});
 
+	$('#btn-layout').addEventListener('click', openLayoutDialog);
+
+	$('#btn-resume').addEventListener('click', attachSession);
+	$('#btn-resume-stop').addEventListener('click', async () => {
+		try {
+			await api.stop();
+			toast('已结束 NAS 上的会话');
+		} catch (err) {
+			toast(err.message, 'error');
+		}
+		$('#resume-bar').classList.add('hidden');
+		await refreshState().catch(() => {});
+	});
+
 	$('#btn-keys').addEventListener('click', openKeysHelp);
 
 	$('#btn-sleep').addEventListener('click', async () => {
@@ -1304,9 +1502,52 @@ function bindStatic() {
 		state.socket?.close();
 	});
 
+	// 切到控制中心 / 锁屏 / 切 Tab 之后回来，iOS 会把 WebCodecs 和
+	// AudioContext 一并冻住，只补一个关键帧是救不回来的，必须重建解码链路。
+	let hiddenAt = 0;
+	const onHidden = () => {
+		hiddenAt = performance.now();
+		state.lastVideoAt = 0;
+	};
+	const onVisible = () => {
+		if (!hiddenAt) return;
+		hiddenAt = 0;
+		if (state.session?.state !== 'streaming' && state.session?.state !== 'connecting') return;
+
+		try {
+			state.audio?.enable?.();
+		} catch {
+			/* AudioContext 可能已经失效，忽略 */
+		}
+		state.video?.reset('页面回到前台');
+		state.lastVideoAt = performance.now();
+		if (state.socket && !state.socket.alive) state.socket.connect();
+	};
+
 	document.addEventListener('visibilitychange', () => {
-		if (document.visibilityState === 'visible' && state.video) state.video.requestKeyframe();
+		if (document.hidden) onHidden();
+		else onVisible();
 	});
+	window.addEventListener('pageshow', onVisible);
+	window.addEventListener('focus', onVisible);
+
+	// 看门狗：串流中如果 3 秒没画出任何一帧，自动重建解码器。
+	// 覆盖「控制中心回来黑屏」「解码器卡死」这类不会抛错的情况。
+	clearInterval(state.stallTimer);
+	state.stallTimer = setInterval(() => {
+		if (document.hidden) return;
+		if (state.session?.state !== 'streaming') return;
+		if (!state.lastVideoAt) {
+			state.lastVideoAt = performance.now();
+			return;
+		}
+		if (performance.now() - state.lastVideoAt > 3000) {
+			state.lastVideoAt = performance.now();
+			console.warn('[video] 3 秒没有新帧，重建解码器');
+			state.video?.reset('画面停滞');
+			if (state.socket && !state.socket.alive) state.socket.connect();
+		}
+	}, 1000);
 }
 
 async function main() {
@@ -1329,9 +1570,6 @@ async function main() {
 	try {
 		await refreshState();
 		showView('home');
-		if (state.session.state === 'streaming') {
-			toast('NAS 上还有正在进行的串流');
-		}
 	} catch (err) {
 		showView('login');
 	}

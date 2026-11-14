@@ -44,6 +44,17 @@
 	</header>
 
 	<main class="content">
+		<!-- 刷新页面后如果 NAS 上还有会话，提示接管 -->
+		<div class="resume-bar hidden" id="resume-bar">
+			<div class="resume-text">
+				<strong>NAS 上还有一个正在进行的串流</strong>
+				<span class="muted small">可能是刷新前的页面留下的。直接接入就能继续玩，不用重新唤醒主机。</span>
+			</div>
+			<div class="row gap">
+				<button class="ghost" id="btn-resume-stop" type="button">结束它</button>
+				<button class="primary" id="btn-resume" type="button">继续接入</button>
+			</div>
+		</div>
 		<div class="section-head">
 			<h2>我的主机</h2>
 			<div class="row gap">
@@ -93,6 +104,7 @@
 				<span class="mono" id="hud-stats">--</span>
 				<button class="icon-btn" id="btn-audio" type="button" title="声音">🔊</button>
 				<button class="icon-btn" id="btn-touch" type="button" title="屏幕按键">🎮</button>
+				<button class="icon-btn" id="btn-layout" type="button" title="按键布局">⚙</button>
 				<button class="icon-btn" id="btn-keys" type="button" title="键盘映射">⌨</button>
 				<button class="icon-btn" id="btn-fullscreen" type="button" title="全屏">⛶</button>
 				<button class="icon-btn" id="btn-sleep" type="button" title="让 PS5 待机">🌙</button>

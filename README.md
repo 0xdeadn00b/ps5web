@@ -4,7 +4,7 @@
 
 底层不是重写的协议栈，而是把 [chiaki-ng](https://github.com/chiaki-ng/chiaki-ng) 的 `libchiaki` 直接编进一个桥接进程，配对、握手、SRTP、FEC 全部复用上游实现，上面再套一层 Web 服务。
 
-> 源码：[github.com/xiaobai9978/ps5web](https://github.com/xiaobai9978/ps5web) · 现成镜像：`docker pull xiaobai9978/ps5web:1.0.4`（[Docker Hub](https://hub.docker.com/r/xiaobai9978/ps5web)）
+> 源码：[github.com/xiaobai9978/ps5web](https://github.com/xiaobai9978/ps5web) · 现成镜像：`docker pull xiaobai9978/ps5web:1.0.5`（[Docker Hub](https://hub.docker.com/r/xiaobai9978/ps5web)）
 > 镜像里**不含任何配对凭据**，凭据只在你自己挂载的 `./data` 里。
 
 ```
@@ -27,7 +27,10 @@
 - 一个 TCP 端口搞定：视频、音频、输入全走同一条 WebSocket，frp / nginx 反代友好（不需要 UDP 打洞、不需要 TURN）
 - 视频用 **WebCodecs** 硬解，`VideoFrame` 直接画 canvas，比 MSE 少几百毫秒缓冲
 - 音频是 PS5 原始 Opus 流，浏览器 `AudioDecoder` 解码 + 环形缓冲吸收抖动
-- 输入支持：物理手柄（Gamepad API，含震动）、键盘鼠标、手机屏幕按键（双摇杆 + 面板键 + 肩键 + 触摸板）
+- 输入支持：物理手柄（Gamepad API，含震动）、键盘鼠标、手机屏幕按键（双摇杆 + 十字键 + 面板键 + 肩键 + 触摸板）
+- 屏幕按键可调：播放页 ⚙ 里能改大小、离边距离、显隐十字键，设置存在浏览器本地
+- 刷新不丢会话：页面重开后顶栏会出现「继续接入」，直接接回 NAS 上还在跑的串流，不用重新唤醒主机
+- 切后台不黑屏：从控制中心/锁屏回来后自动重建解码链路，另有 3 秒无新帧的看门狗兜底
 - 局域网自动发现主机、一键配对、待机唤醒
 - 单密码登录 + HMAC 会话，密码默认随机生成
 - 画质可调：720p/1080p、30/60fps、8–50 Mbps
@@ -82,7 +85,7 @@ environment:
 
 ```bash
 # 1. 拉镜像（238MB，分层算下来实际下载不到 100MB）
-docker pull xiaobai9978/ps5web:1.0.4
+docker pull xiaobai9978/ps5web:1.0.5
 
 # 2. 起服务（compose 里已经写好 image，另外 network_mode: host 是必须的）
 cd ps5web
@@ -103,7 +106,7 @@ docker compose logs -f ps5web
 docker run -d --name ps5web --network host --restart unless-stopped \
   -e PS5WEB_PASSWORD=你的密码 \
   -v /volume1/docker/ps5web:/data \
-  xiaobai9978/ps5web:1.0.4
+  xiaobai9978/ps5web:1.0.5
 ```
 
 ### 想自己构建

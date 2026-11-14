@@ -25,6 +25,14 @@ export class StreamSocket {
 		return this.ws && this.ws.readyState === WebSocket.OPEN;
 	}
 
+	// 连接还活着（含正在握手），避免重复 connect 出现两条 socket
+	get alive() {
+		return (
+			!!this.ws &&
+			(this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING)
+		);
+	}
+
 	connect() {
 		this.closedByUser = false;
 		const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
