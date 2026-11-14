@@ -26,6 +26,11 @@
 }
 
 html,
+html {
+	touch-action: manipulation;
+	-webkit-text-size-adjust: 100%;
+}
+
 body {
 	margin: 0;
 	height: 100%;
@@ -1187,4 +1192,23 @@ kbd {
 		width: 34px;
 		height: 34px;
 	}
+}
+
+/* ---------------------------- 缩放还原 ---------------------------- */
+
+.zoom-reset {
+	position: fixed;
+	left: 50%;
+	top: calc(8px + env(safe-area-inset-top, 0px));
+	transform: translateX(-50%);
+	z-index: 9000;
+	padding: 9px 16px;
+	border-radius: 999px;
+	border: 1px solid rgba(255, 196, 120, 0.55);
+	background: rgba(64, 42, 12, 0.92);
+	color: #ffd9a1;
+	font-size: 13px;
+	font-weight: 600;
+	box-shadow: 0 10px 24px rgba(0, 0, 0, 0.45);
+	backdrop-filter: blur(6px);
 }

@@ -506,14 +506,48 @@ function chipGroup(options, current, { columns = 0 } = {}) {
 	return wrap;
 }
 
+/* ---------------------------- 画质记忆 ---------------------------- */
+
+const QUALITY_KEY = 'ps5web.quality';
+
+function loadQuality() {
+	let saved = null;
+	try {
+		saved = JSON.parse(localStorage.getItem(QUALITY_KEY) || 'null');
+	} catch {
+		/* ignore */
+	}
+	const base = {
+		resolution: state.defaults.resolution || '1080p',
+		fps: Number(state.defaults.fps || 60),
+		bitrate: Number(state.defaults.bitrate || 18000),
+	};
+	if (!saved || typeof saved !== 'object') return base;
+	return {
+		resolution: typeof saved.resolution === 'string' ? saved.resolution : base.resolution,
+		fps: Number(saved.fps) || base.fps,
+		bitrate: Number(saved.bitrate) || base.bitrate,
+	};
+}
+
+function saveQuality(q) {
+	try {
+		localStorage.setItem(QUALITY_KEY, JSON.stringify(q));
+	} catch {
+		/* 隐私模式忽略 */
+	}
+}
+
 function openStartDialog(host) {
+	const remembered = loadQuality();
+
 	const resChips = chipGroup(
 		[
 			{ value: '1080p', label: '1080p' },
 			{ value: '720p', label: '720p' },
 			{ value: '540p', label: '540p' },
 		],
-		state.defaults.resolution || '1080p'
+		remembered.resolution
 	);
 
 	const fpsChips = chipGroup(
@@ -521,7 +555,7 @@ function openStartDialog(host) {
 			{ value: '60', label: '60 fps' },
 			{ value: '30', label: '30 fps' },
 		],
-		String(state.defaults.fps || 60)
+		String(remembered.fps)
 	);
 
 	const bitrateChips = chipGroup(
@@ -529,14 +563,14 @@ function openStartDialog(host) {
 			value: v,
 			label: `${v / 1000} Mbps`,
 		})),
-		String(state.defaults.bitrate || 18000),
+		String(remembered.bitrate),
 		{ columns: 3 }
 	);
 
 	const body = h('div', {}, [
 		h('p', {
 			class: 'muted small',
-			text: '码率越高画质越好，但上行带宽要跟上。远程玩建议 12–18 Mbps。',
+			text: '码率越高画质越好，但上行带宽要跟上。远程玩建议 12–18 Mbps。选完会记住，下次默认还是这套。',
 		}),
 		h('div', { class: 'quality' }, [
 			h('div', { class: 'quality-row' }, [h('span', { text: '分辨率' }), resChips]),
@@ -555,11 +589,13 @@ function openStartDialog(host) {
 				primary: true,
 				onClick: () => {
 					// 不 await：立刻关弹窗进播放页，连接过程用覆盖层反馈
-					startSession(host, {
+					const quality = {
 						resolution: resChips.value,
 						fps: Number(fpsChips.value),
 						bitrate: Number(bitrateChips.value),
-					});
+					};
+					saveQuality(quality);
+					startSession(host, quality);
 					return true;
 				},
 			},
@@ -1534,32 +1570,41 @@ function openKeysHelp() {
 // 双击页面任何地方都会把整个页面放大，而且游戏页是 fixed 布局，放大了退不回去。
 // 这里把 320ms 内的第二次轻点吃掉；pointerdown/up 已经先触发过，按键不受影响。
 function bindTapZoomGuard() {
-	let lastAt = 0;
+	let lastTouchEndAt = 0;
 	let lastX = 0;
 	let lastY = 0;
 
-	// 已经被放大了就别拦，留给系统把页面缩回去，否则会卡在放大状态
+	// 已经被放大了就别拦，留给系统缩回去，否则会卡在放大状态
 	const zoomed = () => (window.visualViewport?.scale || 1) > 1.01;
+
+	// Safari 的缩放是在 touchstart 决定的，只拦 touchend 没用。
+	// 第二次按下的瞬间就 preventDefault，缩放不会发生；
+	// 代价只是这一下不合成 click（按键走 pointer 事件，不受影响）。
+	document.addEventListener(
+		'touchstart',
+		(e) => {
+			if (e.touches.length > 1) return;
+			const t = e.changedTouches[0];
+			if (!t) return;
+			const near = Math.hypot(t.clientX - lastX, t.clientY - lastY) < 40;
+			if (Date.now() - lastTouchEndAt < 320 && near && !zoomed()) {
+				e.preventDefault();
+			}
+		},
+		{ passive: false }
+	);
 
 	document.addEventListener(
 		'touchend',
 		(e) => {
-			if (e.touches.length > 0) return; // 多指手势不拦
+			if (e.touches.length > 0) return;
 			const t = e.changedTouches[0];
 			if (!t) return;
-
-			const now = Date.now();
-			const near = Math.hypot(t.clientX - lastX, t.clientY - lastY) < 40;
-			if (now - lastAt < 320 && near && !zoomed()) {
-				e.preventDefault();
-				lastAt = 0;
-				return;
-			}
-			lastAt = now;
+			lastTouchEndAt = Date.now();
 			lastX = t.clientX;
 			lastY = t.clientY;
 		},
-		{ passive: false }
+		{ passive: true }
 	);
 
 	// 播放页里连双指缩放也禁掉（Safari 专有事件）
@@ -1570,6 +1615,18 @@ function bindTapZoomGuard() {
 		},
 		{ passive: false }
 	);
+
+	// 万一还是被放大了，给一个明确的还原入口（重新加载会重置缩放）
+	const vv = window.visualViewport;
+	if (vv) {
+		const sync = () => {
+			const btn = $('#zoom-reset');
+			if (btn) btn.classList.toggle('hidden', vv.scale <= 1.05);
+		};
+		vv.addEventListener('resize', sync);
+		vv.addEventListener('scroll', sync);
+		sync();
+	}
 }
 
 function bindStatic() {
@@ -1597,6 +1654,8 @@ function bindStatic() {
 	});
 
 	$('#btn-layout').addEventListener('click', openLayoutDialog);
+
+	$('#zoom-reset').addEventListener('click', () => location.reload());
 
 	$('#btn-resume').addEventListener('click', attachSession);
 	$('#btn-resume-stop').addEventListener('click', async () => {

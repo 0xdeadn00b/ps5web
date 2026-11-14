@@ -4,7 +4,7 @@
 
 底层不是重写的协议栈，而是把 [chiaki-ng](https://github.com/chiaki-ng/chiaki-ng) 的 `libchiaki` 直接编进一个桥接进程，配对、握手、SRTP、FEC 全部复用上游实现，上面再套一层 Web 服务。
 
-> 源码：[github.com/xiaobai9978/ps5web](https://github.com/xiaobai9978/ps5web) · 现成镜像：`docker pull xiaobai9978/ps5web:1.0.8`（[Docker Hub](https://hub.docker.com/r/xiaobai9978/ps5web)）
+> 源码：[github.com/xiaobai9978/ps5web](https://github.com/xiaobai9978/ps5web) · 现成镜像：`docker pull xiaobai9978/ps5web:1.0.9`（[Docker Hub](https://hub.docker.com/r/xiaobai9978/ps5web)）
 > 镜像里**不含任何配对凭据**，凭据只在你自己挂载的 `./data` 里。
 
 ```
@@ -88,7 +88,7 @@ environment:
 
 ```bash
 # 1. 拉镜像（238MB，分层算下来实际下载不到 100MB）
-docker pull xiaobai9978/ps5web:1.0.8
+docker pull xiaobai9978/ps5web:1.0.9
 
 # 2. 起服务（compose 里已经写好 image，另外 network_mode: host 是必须的）
 cd ps5web
@@ -109,7 +109,7 @@ docker compose logs -f ps5web
 docker run -d --name ps5web --network host --restart unless-stopped \
   -e PS5WEB_PASSWORD=你的密码 \
   -v /volume1/docker/ps5web:/data \
-  xiaobai9978/ps5web:1.0.8
+  xiaobai9978/ps5web:1.0.9
 ```
 
 ### 想自己构建
