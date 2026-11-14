@@ -1,0 +1,20 @@
+{
+	"name": "PS5 Web Play",
+	"short_name": "PS5",
+	"description": "在浏览器里串流家里的 PS5",
+	"start_url": "/",
+	"scope": "/",
+	"display": "standalone",
+	"display_override": ["fullscreen", "standalone", "minimal-ui"],
+	"orientation": "landscape",
+	"background_color": "#080b11",
+	"theme_color": "#080b11",
+	"icons": [
+		{
+			"src": "/img/favicon.svg",
+			"sizes": "any",
+			"type": "image/svg+xml",
+			"purpose": "any"
+		}
+	]
+}

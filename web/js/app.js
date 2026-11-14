@@ -1076,6 +1076,61 @@ function makeStick(which, style) {
 	return el;
 }
 
+/* ---------------------------- 全屏 ---------------------------- */
+
+// iPhone 上的浏览器（包括 iOS 版 Firefox、Chrome，它们都是 WebKit 内核）
+// 没有 Element.requestFullscreen，只能自己模拟一个「沉浸模式」。
+function nativeFullscreenAvailable() {
+	const el = document.documentElement;
+	return !!(el.requestFullscreen || el.webkitRequestFullscreen || el.mozRequestFullScreen || el.msRequestFullscreen);
+}
+
+function fullscreenElement() {
+	return document.fullscreenElement || document.webkitFullscreenElement || null;
+}
+
+function immersiveOn() {
+	return document.body.classList.contains('immersive');
+}
+
+function tryLockLandscape() {
+	// Android Chrome 支持；iOS 会直接抛错，忽略即可
+	try {
+		screen.orientation?.lock?.('landscape')?.catch?.(() => {});
+	} catch {
+		/* ignore */
+	}
+}
+
+async function toggleFullscreen() {
+	const stage = $('#stage');
+
+	if (!nativeFullscreenAvailable()) {
+		const on = document.body.classList.toggle('immersive');
+		state.immersive = on;
+		if (on) {
+			tryLockLandscape();
+			toast('已进入沉浸模式。iPhone 上要真正的全屏（没有地址栏），请用「分享 → 添加到主屏幕」，从图标打开。', '', 9000);
+		}
+		return;
+	}
+
+	try {
+		if (fullscreenElement()) {
+			await (document.exitFullscreen ? document.exitFullscreen() : document.webkitExitFullscreen());
+		} else {
+			const req = stage.requestFullscreen || stage.webkitRequestFullscreen;
+			await req.call(stage);
+			tryLockLandscape();
+		}
+	} catch (err) {
+		// 原生全屏被拒绝（有些浏览器要求用户手势、或策略禁止）时退回沉浸模式
+		const on = document.body.classList.toggle('immersive');
+		state.immersive = on;
+		if (on) toast('系统不允许网页全屏，已切换到沉浸模式：' + (err?.message || 'unknown'), '', 6000);
+	}
+}
+
 function buildTouchUI() {
 	const ui = $('#touch-ui');
 	ui.innerHTML = '';
@@ -1083,13 +1138,15 @@ function buildTouchUI() {
 	ui.append(makeStick('left', 'left:14px;bottom:14px;'));
 	ui.append(makeStick('right', 'right:14px;bottom:14px;'));
 
-	// 面板键（菱形）
-	ui.append(
-		makeButton('△', BTN.TRIANGLE, 'right:104px;bottom:186px;'),
-		makeButton('○', BTN.CIRCLE, 'right:34px;bottom:186px;'),
-		makeButton('✕', BTN.CROSS, 'right:104px;bottom:116px;'),
-		makeButton('□', BTN.SQUARE, 'right:174px;bottom:116px;')
+	// 面板键：九宫格摆成十字，和手柄一致 —— △上 ○右 ✕下 □左
+	const face = h('div', { class: 'pad-face' });
+	face.append(
+		makeButton('△', BTN.TRIANGLE, '', false, 'f-t f-tri'),
+		makeButton('○', BTN.CIRCLE, '', false, 'f-r f-cir'),
+		makeButton('✕', BTN.CROSS, '', false, 'f-b f-cro'),
+		makeButton('□', BTN.SQUARE, '', false, 'f-l f-squ')
 	);
+	ui.append(face);
 
 	// 肩键
 	ui.append(
@@ -1204,15 +1261,7 @@ function bindStatic() {
 	$('#btn-stop').addEventListener('click', stopSession);
 	$('#btn-overlay-cancel').addEventListener('click', stopSession);
 
-	$('#btn-fullscreen').addEventListener('click', async () => {
-		const stage = $('#stage');
-		try {
-			if (document.fullscreenElement) await document.exitFullscreen();
-			else await stage.requestFullscreen();
-		} catch (err) {
-			toast('无法进入全屏：' + err.message, 'error');
-		}
-	});
+	$('#btn-fullscreen').addEventListener('click', toggleFullscreen);
 
 	$('#btn-touch').addEventListener('click', () => {
 		setTouchVisible(!state.touchVisible);
