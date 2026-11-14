@@ -31,7 +31,7 @@ const state = {
 /* ---------------------------- 按键布局 ---------------------------- */
 
 const LAYOUT_KEY = 'ps5web.layout';
-const LAYOUT_DEFAULT = { ctl: 1, inset: 1, dpad: true };
+const LAYOUT_DEFAULT = { ctl: 1, inset: 1, dpad: true, rumble: 'auto' };
 
 function loadLayout() {
 	try {
@@ -580,11 +580,13 @@ function openLayoutDialog() {
 	);
 	const inset = chipGroup(
 		[
-			{ value: 0.7, label: '靠边' },
+			{ value: 0.6, label: '贴边' },
 			{ value: 1, label: '适中' },
-			{ value: 1.4, label: '靠里' },
+			{ value: 1.8, label: '靠里' },
+			{ value: 2.6, label: '很靠里' },
 		],
-		state.layout.inset
+		state.layout.inset,
+		{ columns: 4 }
 	);
 	const dpad = chipGroup(
 		[
@@ -593,11 +595,19 @@ function openLayoutDialog() {
 		],
 		state.layout.dpad ? 'on' : 'off'
 	);
+	const rumble = chipGroup(
+		[
+			{ value: 'auto', label: '自动' },
+			{ value: 'off', label: '关闭' },
+		],
+		state.layout.rumble || 'auto'
+	);
 
 	// 点一下立刻生效，边看边调
 	size.addEventListener('click', () => saveLayout({ ctl: Number(size.value) }));
 	inset.addEventListener('click', () => saveLayout({ inset: Number(inset.value) }));
 	dpad.addEventListener('click', () => saveLayout({ dpad: dpad.value === 'on' }));
+	rumble.addEventListener('click', () => saveLayout({ rumble: rumble.value }));
 
 	const body = h('div', {}, [
 		h('p', {
@@ -607,6 +617,13 @@ function openLayoutDialog() {
 		h('div', { class: 'quality-row' }, [h('span', { text: '按键大小' }), size]),
 		h('div', { class: 'quality-row' }, [h('span', { text: '离边距离' }), inset]),
 		h('div', { class: 'quality-row' }, [h('span', { text: '十字键' }), dpad]),
+		h('div', { class: 'quality-row' }, [h('span', { text: '震动反馈' }), rumble]),
+		h('p', {
+			class: 'muted small',
+			text: canVibrate
+				? '手柄震动会同时带动手机振一下（幅度没法调，只能用长短区分）。'
+				: 'iPhone 的浏览器没有震动 API（WebKit 从没实现），这里用屏幕边缘的柔光代替。',
+		}),
 		h('button', {
 			class: 'ghost',
 			type: 'button',
@@ -821,6 +838,7 @@ function onServerMessage(msg) {
 
 		case 'rumble':
 			state.input?.handleRumble(msg.left, msg.right);
+			phoneRumble(msg.left, msg.right);
 			break;
 
 		case 'stats':
@@ -1020,6 +1038,7 @@ function bindStageGestures(canvas) {
 	let startY = 0;
 	let moving = false;
 	let wasDim = false;
+	let inZone = false;
 
 	const toTouchpad = (clientX, clientY) => {
 		const rect = canvas.getBoundingClientRect();
@@ -1037,12 +1056,23 @@ function bindStageGestures(canvas) {
 		return { x: x * 1919, y: y * 1079 };
 	};
 
+	// 触摸板只认屏幕正中间那一块（62% 宽 / 64% 高），
+	// 边缘留给屏幕按键和普通点按，避免蹭到就误触发触摸板
+	const inPadZone = (clientX, clientY) => {
+		const rect = canvas.getBoundingClientRect();
+		if (!rect.width || !rect.height) return false;
+		const nx = (clientX - rect.left) / rect.width;
+		const ny = (clientY - rect.top) / rect.height;
+		return nx > 0.19 && nx < 0.81 && ny > 0.18 && ny < 0.82;
+	};
+
 	canvas.addEventListener('pointerdown', (e) => {
 		if (e.pointerType === 'mouse' && e.button !== 0) return;
 		pointerId = e.pointerId;
 		startX = e.clientX;
 		startY = e.clientY;
 		moving = false;
+		inZone = inPadZone(e.clientX, e.clientY);
 		// 记下按下去之前 HUD 是显示还是隐藏的。
 		// 以前是在 pointerdown 里先 pulseHud() 显示，pointerup 又 toggle 一次，
 		// 结果轻点一下反而是「闪一下又消失」，只有按住拖一下才能留住。
@@ -1056,9 +1086,13 @@ function bindStageGestures(canvas) {
 		const dx = e.clientX - startX;
 		const dy = e.clientY - startY;
 
-		if (!moving && Math.hypot(dx, dy) > 10) {
+		if (!moving && inZone && Math.hypot(dx, dy) > 12) {
 			moving = true;
 			state.input?.setButton(BTN.TOUCHPAD, true);
+			$('#pad-zone').classList.add('on');
+			// 先补一个「按下点」，否则触摸板会从手指滑到 12px 之后的位置才开始响应
+			const p0 = toTouchpad(startX, startY);
+			if (p0) state.input?.setTouch(0, p0.x, p0.y, true);
 		}
 
 		if (moving) {
@@ -1074,6 +1108,7 @@ function bindStageGestures(canvas) {
 		if (moving) {
 			state.input?.clearTouches();
 			state.input?.setButton(BTN.TOUCHPAD, false);
+			$('#pad-zone').classList.remove('on');
 			moving = false;
 			return;
 		}
@@ -1246,6 +1281,44 @@ function makeStick(which, style) {
 	el.addEventListener('lostpointercapture', end);
 
 	return el;
+}
+
+/* ---------------------------- 震动 ---------------------------- */
+
+// Android 的 navigator.vibrate 能真振；iOS（含 Firefox/Chrome，都是 WebKit）
+// 从来没有实现过 Vibration API，只能用边缘柔光代替。
+const canVibrate = typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function';
+let lastBuzzAt = 0;
+let glowTimer = 0;
+
+function phoneRumble(left, right) {
+	if (state.layout?.rumble === 'off') return;
+
+	const strength = Math.max(left || 0, right || 0);
+	if (strength < 24) return;
+
+	const now = performance.now();
+	if (now - lastBuzzAt < 90) return;
+	lastBuzzAt = now;
+
+	if (canVibrate) {
+		// 震动强度没法调，只能用时长表达强弱
+		const ms = Math.round(8 + (strength / 255) * 34);
+		try {
+			navigator.vibrate(ms);
+		} catch {
+			/* ignore */
+		}
+		return;
+	}
+
+	const glow = $('#rumble-glow');
+	if (!glow) return;
+	glow.style.opacity = String(Math.min(0.9, 0.22 + (strength / 255) * 0.65));
+	clearTimeout(glowTimer);
+	glowTimer = setTimeout(() => {
+		glow.style.opacity = '0';
+	}, 110);
 }
 
 /* ---------------------------- 全屏 ---------------------------- */

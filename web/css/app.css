@@ -682,9 +682,9 @@ body.immersive .insecure-banner {
 
 .touch-ui {
 	--ctl: var(--ctl-scale, 1); /* 按键整体缩放，由「按键布局」调节 */
-	--inset-scale: 1; /* 离屏幕边缘的距离系数 */
-	--inset-x: calc(clamp(22px, 5vw, 64px) * var(--inset-scale));
-	--inset-y: calc(clamp(16px, 3vh, 40px) * var(--inset-scale));
+	--inset-scale: 1; /* 离屏幕边缘的距离系数（横向按倍数，纵向只跟一部分） */
+	--inset-x: calc(clamp(22px, 5vw, 120px) * var(--inset-scale));
+	--inset-y: calc(clamp(14px, 3vh, 34px) * (1 + (var(--inset-scale) - 1) * 0.3));
 	--stick: calc(clamp(86px, 25vh, 118px) * var(--ctl));
 	--face-btn: calc(clamp(38px, 10.5vh, 54px) * var(--ctl));
 	--btn-gap: clamp(4px, 1vh, 8px);
@@ -696,6 +696,44 @@ body.immersive .insecure-banner {
 	user-select: none;
 	-webkit-user-select: none;
 	-webkit-touch-callout: none;
+}
+
+/* 触摸板生效区：只有屏幕正中间这一块算触摸板，边缘留给按键和手势 */
+.pad-zone {
+	position: absolute;
+	left: 50%;
+	top: 50%;
+	transform: translate(-50%, -50%);
+	width: 62%;
+	height: 64%;
+	border: 1px dashed rgba(255, 255, 255, 0.22);
+	border-radius: 20px;
+	pointer-events: none;
+	opacity: 0;
+	transition: opacity 0.16s;
+	z-index: 8;
+	display: flex;
+	align-items: flex-start;
+	justify-content: center;
+	padding-top: 10px;
+	font-size: 11px;
+	letter-spacing: 0.08em;
+	color: rgba(255, 255, 255, 0.45);
+}
+
+.pad-zone.on {
+	opacity: 1;
+}
+
+/* iOS 没有 Vibration API，用边缘柔光代替手柄震动 */
+.rumble-glow {
+	position: absolute;
+	inset: 0;
+	pointer-events: none;
+	opacity: 0;
+	transition: opacity 0.12s ease-out;
+	box-shadow: inset 0 0 70px 10px rgba(120, 170, 255, 0.5);
+	z-index: 9;
 }
 
 .tb {
