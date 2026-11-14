@@ -1039,6 +1039,9 @@ function bindStageGestures(canvas) {
 	let moving = false;
 	let wasDim = false;
 	let inZone = false;
+	let touching = false; // 手指正按在触摸板上（只是触摸，不等于按下）
+	let tapTimer = 0;
+	let touchStartAt = 0;
 
 	const toTouchpad = (clientX, clientY) => {
 		const rect = canvas.getBoundingClientRect();
@@ -1079,6 +1082,19 @@ function bindStageGestures(canvas) {
 		wasDim = $('#hud').classList.contains('dim');
 		canvas.setPointerCapture(e.pointerId);
 		pulseHud();
+
+		// 中间区域：手指落下去就是「摸到触摸板」，只上报触摸点，不按下。
+		// 上滑/下滑就是真机上的「在触摸板上滑」，松手才算结束。
+		clearTimeout(tapTimer);
+		if (inZone) {
+			const p = toTouchpad(e.clientX, e.clientY);
+			if (p) {
+				touching = true;
+				touchStartAt = performance.now();
+				state.input?.setTouch(0, p.x, p.y, true);
+				$('#pad-zone').classList.add('on');
+			}
+		}
 	});
 
 	canvas.addEventListener('pointermove', (e) => {
@@ -1086,16 +1102,10 @@ function bindStageGestures(canvas) {
 		const dx = e.clientX - startX;
 		const dy = e.clientY - startY;
 
-		if (!moving && inZone && Math.hypot(dx, dy) > 12) {
-			moving = true;
-			state.input?.setButton(BTN.TOUCHPAD, true);
-			$('#pad-zone').classList.add('on');
-			// 先补一个「按下点」，否则触摸板会从手指滑到 12px 之后的位置才开始响应
-			const p0 = toTouchpad(startX, startY);
-			if (p0) state.input?.setTouch(0, p0.x, p0.y, true);
-		}
+		// 超过 10px 就算滑动，滑动期间绝不按下触摸板
+		if (!moving && Math.hypot(dx, dy) > 10) moving = true;
 
-		if (moving) {
+		if (touching) {
 			const p = toTouchpad(e.clientX, e.clientY);
 			if (p) state.input?.setTouch(0, p.x, p.y, true);
 		}
@@ -1105,15 +1115,28 @@ function bindStageGestures(canvas) {
 		if (e.pointerId !== pointerId) return;
 		pointerId = null;
 
-		if (moving) {
-			state.input?.clearTouches();
-			state.input?.setButton(BTN.TOUCHPAD, false);
+		if (touching) {
+			touching = false;
 			$('#pad-zone').classList.remove('on');
+
+			const held = performance.now() - touchStartAt;
+			if (moving || held > 400) {
+				// 滑动、或者按住不放再松开：都只算触摸结束，不产生「按下」
+				state.input?.clearTouches();
+			} else {
+				// 轻点中间 = 按下触摸板（PS5 的 pad click），按住 60ms 再松开
+				clearTimeout(tapTimer);
+				state.input?.setButton(BTN.TOUCHPAD, true);
+				tapTimer = setTimeout(() => {
+					state.input?.setButton(BTN.TOUCHPAD, false);
+					state.input?.clearTouches();
+				}, 60);
+			}
 			moving = false;
 			return;
 		}
 
-		// 单击：原本隐藏的 → 显示出来并保持 3 秒；原本显示的 → 收起来
+		// 中间区域以外：原本隐藏的 → 显示出来并保持 3 秒；原本显示的 → 收起来
 		if (wasDim) {
 			pulseHud();
 		} else {

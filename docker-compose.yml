@@ -8,7 +8,7 @@
 services:
   ps5web:
     # 现成镜像（238MB，拉下来不到 100MB）
-    image: xiaobai9978/ps5web:1.0.6
+    image: xiaobai9978/ps5web:1.0.7
 
     # 想改代码自己构建，取消下面注释（会覆盖上面的 image）
     # build:
