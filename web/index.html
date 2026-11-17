@@ -19,18 +19,36 @@
 
 <button class="zoom-reset hidden" id="zoom-reset" type="button">视图被放大了 · 点此还原</button>
 
+<!-- ------------------------------ 观战（默认首页） ------------------------------ -->
+<section id="view-watch" class="view hidden">
+	<!-- 没人玩时的封面；有人玩时小窗浮在页面上方 -->
+	<div class="watch-cover" id="watch-cover">
+		<div class="brand big">PS5 <span>Web Play</span></div>
+		<p class="muted" id="watch-cover-text">正在看看有没有人在玩…</p>
+		<div class="row gap center">
+			<button class="primary hidden" id="btn-watch-start" type="button">开始观战</button>
+		</div>
+	</div>
+
+	<div class="watch-actions">
+		<button class="ghost" id="btn-watch-refresh" type="button">刷新</button>
+		<button class="primary" id="btn-take-control" type="button">我要操控</button>
+		<button class="ghost hidden" id="btn-admin" type="button">管理</button>
+	</div>
+</section>
+
 <!-- ------------------------------ 登录 ------------------------------ -->
-<section id="view-login" class="view">
+<section id="view-login" class="view hidden">
 	<form id="login-form" class="card login-card" autocomplete="on">
 		<div class="brand big">PS5 <span>Web Play</span></div>
-		<p class="muted">家里 NAS 上的串流服务，输入访问密码进入。</p>
+		<p class="muted">操控需要密码，输入访问密码解锁。</p>
 		<label class="field">
 			<span>访问密码</span>
 			<input id="login-password" type="password" autocomplete="current-password" required>
 		</label>
-		<button class="primary" type="submit">进入</button>
+		<button class="primary" type="submit">解锁操控</button>
 		<p class="error" id="login-error"></p>
-		<p class="muted small" id="login-foot"></p>
+		<button class="ghost" id="btn-login-back" type="button">返回观战</button>
 	</form>
 </section>
 
@@ -40,6 +58,7 @@
 		<div class="brand">PS5 <span>Web Play</span></div>
 		<div class="row gap">
 			<span class="pill" id="status-pill">空闲</span>
+			<button class="ghost" id="btn-back-watch" type="button">返回观战</button>
 			<button class="ghost" id="btn-logs" type="button">日志</button>
 			<button class="ghost" id="btn-logout" type="button">退出</button>
 		</div>
@@ -93,6 +112,11 @@
 
 <!-- ------------------------------ 播放 ------------------------------ -->
 <section id="view-player" class="view hidden">
+	<div class="pip-bar" id="pip-bar">
+		<span class="rec-dot"></span>
+		<span id="pip-status">直播中</span>
+		<button class="pip-btn" id="btn-pip-expand" type="button" title="放大全屏">⛶ 放大</button>
+	</div>
 	<div class="stage" id="stage">
 		<canvas id="screen"></canvas>
 
@@ -103,13 +127,15 @@
 			</div>
 			<div class="hud-right">
 				<span class="mono" id="hud-stats">--</span>
+				<button class="ghost small hidden" id="btn-hud-take" type="button">我要操控</button>
 				<button class="icon-btn" id="btn-audio" type="button" title="声音">🔊</button>
-				<button class="icon-btn" id="btn-touch" type="button" title="屏幕按键">🎮</button>
-				<button class="icon-btn" id="btn-layout" type="button" title="按键布局">⚙</button>
-				<button class="icon-btn" id="btn-keys" type="button" title="键盘映射">⌨</button>
+				<button class="icon-btn" data-ctl id="btn-touch" type="button" title="屏幕按键">🎮</button>
+				<button class="icon-btn" data-ctl id="btn-layout" type="button" title="按键布局">⚙</button>
+				<button class="icon-btn" data-ctl id="btn-keys" type="button" title="键盘映射">⌨</button>
 				<button class="icon-btn" id="btn-fullscreen" type="button" title="全屏">⛶</button>
-				<button class="icon-btn" id="btn-sleep" type="button" title="让 PS5 待机">🌙</button>
-				<button class="icon-btn danger" id="btn-stop" type="button" title="结束串流">✕</button>
+				<button class="icon-btn" data-ctl id="btn-sleep" type="button" title="让 PS5 待机">🌙</button>
+				<button class="icon-btn danger" data-ctl id="btn-stop" type="button" title="结束串流">✕</button>
+				<button class="icon-btn danger hidden" id="btn-exit-watch" type="button" title="退出全屏观看">✕</button>
 			</div>
 		</div>
 	</div>

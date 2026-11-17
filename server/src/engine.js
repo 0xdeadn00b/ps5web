@@ -66,6 +66,9 @@ class Engine extends EventEmitter {
 				current: this.current,
 				audio: this.audioFormat,
 				config: config.video,
+				// conn.control 由 HTTP 层根据登录 cookie 设置：
+				// 匿名连接只能看，登录了才能发输入/控制
+				control: !!conn.control,
 			})
 		);
 

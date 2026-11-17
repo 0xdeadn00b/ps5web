@@ -23,6 +23,8 @@ async function request(path, options = {}) {
 }
 
 export const api = {
+	live: () => request('/api/live'),
+	watchStart: () => request('/api/watch/start', { method: 'POST' }),
 	state: () => request('/api/state'),
 	login: (password) => request('/api/login', { method: 'POST', body: JSON.stringify({ password }) }),
 	logout: () => request('/api/logout', { method: 'POST' }),

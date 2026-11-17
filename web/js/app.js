@@ -26,6 +26,11 @@ const state = {
 	logCursor: 0,
 	lastVideoAt: 0,
 	stallTimer: null,
+	// 观战模式
+	mode: null, // null | 'pip' | 'watch' | 'control'
+	controlMode: 'watch', // 'watch' = 匿名只读通道；'control' = 登录后通道
+	authed: false,
+	liveTimer: 0,
 };
 
 /* ---------------------------- 按键布局 ---------------------------- */
@@ -187,10 +192,188 @@ function showInsecureBanner() {
 }
 
 function showView(name) {
-	for (const view of ['login', 'home', 'player']) {
+	for (const view of ['watch', 'login', 'home']) {
 		$(`#view-${view}`).classList.toggle('hidden', view !== name);
 	}
-	document.body.style.overflow = name === 'player' ? 'hidden' : '';
+}
+
+/* ------------------------------------------------------------------ */
+/* 观战：默认小窗看直播，输密码后才能操控                                */
+/* ------------------------------------------------------------------ */
+
+// 播放器三种形态：pip（右上角小窗）/ watch（全屏观看）/ control（登录后操控）
+// 播放器区的显隐完全由 setPlayerMode 管，不走 showView。
+function setPlayerMode(mode) {
+	state.mode = mode;
+	const body = document.body;
+	body.classList.remove('mode-pip', 'mode-watch', 'mode-control');
+
+	const player = $('#view-player');
+	if (!mode) {
+		player.classList.add('hidden');
+		body.style.overflow = '';
+		syncModeButtons();
+		return;
+	}
+
+	body.classList.add('mode-' + mode);
+	player.classList.remove('hidden');
+
+	if (mode === 'pip') {
+		showView('watch');
+		body.style.overflow = '';
+		applyPipSavedPos();
+	} else {
+		body.style.overflow = 'hidden';
+		$('#view-player').style.left = $('#view-player').style.top = $('#view-player').style.right = '';
+	}
+
+	setTouchVisible(mode === 'control' && (window.matchMedia('(pointer: coarse)').matches || state.touchVisible));
+	syncModeButtons();
+	updatePadZone();
+}
+
+function syncModeButtons() {
+	const m = state.mode;
+	for (const el of document.querySelectorAll('[data-ctl]')) el.classList.toggle('hidden', m !== 'control');
+	$('#btn-exit-watch').classList.toggle('hidden', m !== 'watch');
+	$('#btn-hud-take').classList.toggle('hidden', m !== 'watch');
+}
+
+function setPipStatus(text) {
+	const el = $('#pip-status');
+	if (el) el.textContent = text;
+}
+
+/** 打开（或复用）观战通道：匿名 WS，服务器只当它是观众 */
+function ensurePipStream() {
+	if (state.socket?.alive && state.controlMode === 'watch') return;
+	if (state.socket) {
+		state.socket.close();
+		state.socket = null;
+	}
+	state.controlMode = 'watch';
+	preparePlayer();
+	setPlayerMode('pip');
+}
+
+function teardownPlayer() {
+	if (state.socket) {
+		state.socket.close();
+		state.socket = null;
+	}
+	state.video?.destroy();
+	state.video = null;
+	state.audio?.destroy();
+	state.audio = null;
+	state.input?.stop();
+	state.input = null;
+	clearInterval(state.pingTimer);
+}
+
+function exitToCover() {
+	teardownPlayer();
+	setPlayerMode(null);
+	showView('watch');
+	clearTimeout(state.liveTimer);
+	pollLive();
+}
+
+async function expandWatch() {
+	// 放大是一个用户手势，借机解锁声音
+	state.audio?.enable?.().catch(() => {});
+	setPlayerMode('watch');
+}
+
+async function pollLive() {
+	if ($('#view-watch').classList.contains('hidden')) return;
+
+	let s;
+	try {
+		s = await api.live();
+	} catch {
+		$('#watch-cover-text').textContent = '连不上服务器，稍后自动重试…';
+		clearTimeout(state.liveTimer);
+		state.liveTimer = setTimeout(pollLive, 5000);
+		return;
+	}
+
+	state.session = { state: s.state, current: s.current };
+	updateStatusPill();
+	const live = s.state === 'streaming' || s.state === 'connecting';
+
+	if (live) {
+		if (state.mode === 'pip' || state.mode === null) {
+			$('#watch-cover').classList.add('hidden');
+			ensurePipStream();
+			setPipStatus(s.current?.nickname || s.current?.name || '直播中');
+		} else if (state.mode === 'watch') {
+			setPipStatus(s.current?.nickname || s.current?.name || '直播中');
+		}
+	} else if (state.mode === 'pip') {
+		// 直播在两次轮询之间结束了
+		exitToCover();
+		return;
+	} else if (state.mode === 'watch') {
+		showOverlay('直播已结束', '现在没人在玩了。', false);
+		return;
+	} else {
+		$('#watch-cover').classList.remove('hidden');
+		$('#btn-watch-start').classList.toggle('hidden', !s.canStart);
+		$('#watch-cover-text').textContent = s.canStart
+			? '现在没人在玩。点下面的按钮唤醒 PS5 开始观战（主机启动大约 30 秒）。'
+			: '房主还没有配对 PS5，暂时没有内容可看。';
+	}
+
+	clearTimeout(state.liveTimer);
+	state.liveTimer = setTimeout(pollLive, live ? 8000 : 6000);
+}
+
+async function startWatchSession() {
+	$('#btn-watch-start').disabled = true;
+	$('#watch-cover-text').textContent = '正在唤醒主机…';
+	try {
+		await api.watchStart();
+	} catch (err) {
+		toast(err.message, 'error', 6000);
+	} finally {
+		$('#btn-watch-start').disabled = false;
+	}
+	$('#watch-cover').classList.add('hidden');
+	setPipStatus('连接中…');
+	ensurePipStream();
+	clearTimeout(state.liveTimer);
+	state.liveTimer = setTimeout(pollLive, 4000);
+}
+
+async function requestControl() {
+	if (state.authed) return enterControlMode();
+	showView('login');
+}
+
+/** 已登录（或刚输完密码）：换成带控制权的连接 */
+async function enterControlMode() {
+	const s = state.session || {};
+	const live = s.state === 'streaming' || s.state === 'connecting';
+
+	if (!live) {
+		if (state.mode) {
+			teardownPlayer();
+			setPlayerMode(null);
+		}
+		clearTimeout(state.liveTimer);
+		await refreshState().catch(() => {});
+		showView('home');
+		return;
+	}
+
+	teardownPlayer();
+	state.controlMode = 'control';
+	preparePlayer();
+	setPlayerMode('control');
+	state.audio?.enable().then((ok) => {
+		if (!ok) toast('浏览器不支持 WebCodecs 音频解码，本次没有声音', 'error', 5000);
+	});
 }
 
 function updateStatusPill() {
@@ -216,8 +399,8 @@ async function onLoginSubmit(e) {
 	try {
 		await api.login(input.value);
 		input.value = '';
-		await refreshState();
-		showView('home');
+		state.authed = true;
+		await enterControlMode();
 	} catch (err) {
 		error.textContent = err.message;
 	} finally {
@@ -680,8 +863,8 @@ function openLayoutDialog() {
 
 async function startSession(host, opts) {
 	state.currentHost = host;
-
-	showView('player');
+	state.controlMode = 'control';
+	setPlayerMode('control');
 	preparePlayer();
 
 	// 必须在用户手势里创建 AudioContext
@@ -744,7 +927,8 @@ function attachSession() {
 	state.currentHost = host;
 	$('#resume-bar').classList.add('hidden');
 
-	showView('player');
+	state.controlMode = 'control';
+	setPlayerMode('control');
 	preparePlayer();
 
 	state.audio.enable().then((ok) => {
@@ -803,11 +987,12 @@ function preparePlayer() {
 	state.input = new InputManager({ send: (pkt) => state.socket?.sendInput(pkt) });
 
 	state.socket = new StreamSocket();
+	const asControl = state.controlMode === 'control';
 	state.socket.onVideo = (buf, sentAt) => state.video?.push(buf, sentAt);
 	state.socket.onAudio = (buf) => state.audio?.push(buf);
 	state.socket.onJson = onServerMessage;
 	state.socket.onOpen = () => {
-		state.input?.start();
+		if (asControl) state.input?.start();
 		sendPing();
 		if (VideoPipeline.supported) state.video?.requestKeyframe();
 
@@ -816,6 +1001,12 @@ function preparePlayer() {
 		state.pingTimer = setInterval(sendPing, 2000);
 	};
 	state.socket.onClose = () => {
+		if (state.mode === 'pip') {
+			setPipStatus('连接断开，重连中…');
+			clearTimeout(state.liveTimer);
+			state.liveTimer = setTimeout(pollLive, 4000);
+			return;
+		}
 		if (state.session.state === 'streaming') {
 			showOverlay('与 NAS 的连接断开', '正在自动重连…', true);
 		}
@@ -828,7 +1019,7 @@ function preparePlayer() {
 	}
 
 	const coarse = window.matchMedia('(pointer: coarse)').matches;
-	setTouchVisible(coarse || state.touchVisible);
+	setTouchVisible(asControl && (coarse || state.touchVisible));
 
 	if (!state.stageBound) {
 		bindStageGestures(canvas);
@@ -859,8 +1050,15 @@ function onServerMessage(msg) {
 		case 'hello':
 			if (msg.current) $('#hud-title').textContent = msg.current.nickname || msg.current.name;
 			if (msg.audio) state.audio?.configure(msg.audio);
-			if (msg.state === 'streaming') hideOverlay();
-			else if (msg.state === 'idle') {
+			if (msg.state === 'streaming') {
+				hideOverlay();
+				if (state.mode === 'pip') setPipStatus(msg.current?.nickname || msg.current?.name || '直播中');
+			} else if (msg.state === 'idle') {
+				if (state.mode === 'pip') {
+					// 轮询说在播、连上却发现结束了：回封面重新计时
+					exitToCover();
+					return;
+				}
 				// 接回来的时候会话其实已经结束了
 				showOverlay('这个会话已经结束了', '回上一页点「开始串流」重新连一次。', false);
 			}
@@ -873,12 +1071,17 @@ function onServerMessage(msg) {
 			updateStatusPill();
 			if (msg.state === 'streaming') {
 				hideOverlay();
+				if (state.mode === 'pip') setPipStatus(msg.current?.nickname || msg.current?.name || '直播中');
 				// AudioContext 可能因为自动播放策略被挂起
-				if (state.audio && (!state.audio.ctx || state.audio.ctx.state !== 'running')) {
+				if (state.mode === 'control' && state.audio && (!state.audio.ctx || state.audio.ctx.state !== 'running')) {
 					$('#audio-unlock').classList.remove('hidden');
 				}
 			} else if (msg.state === 'connecting') {
-				showOverlay('正在连接 PS5…', '握手需要几秒，请稍候。', true);
+				if (state.mode === 'pip') setPipStatus('正在连接 PS5…');
+				else showOverlay('正在连接 PS5…', '握手需要几秒，请稍候。', true);
+			} else if (msg.state === 'idle' && state.mode === 'pip') {
+				exitToCover();
+				return;
 			}
 			break;
 
@@ -913,6 +1116,12 @@ function onServerMessage(msg) {
 			break;
 
 		case 'quit':
+			if (state.mode === 'pip') {
+				// 直播结束了：收起小窗，回封面重新轮询
+				setTimeout(exitToCover, 1500);
+				setPipStatus('直播已结束');
+				break;
+			}
 			showOverlay(
 				msg.error ? '会话中断' : '会话已结束',
 				`${msg.reason || ''}${msg.detail ? ' · ' + msg.detail : ''}`,
@@ -945,6 +1154,8 @@ function onServerMessage(msg) {
 }
 
 function openPinDialog(incorrect) {
+	// 观战者不该看到配对 PIN 弹窗（那是控制端的事）
+	if (state.mode !== 'control') return;
 	const input = h('input', { placeholder: '8 位数字', inputmode: 'numeric', autocomplete: 'off' });
 
 	openModal({
@@ -1042,6 +1253,11 @@ function updateHudStats() {
 }
 
 function showOverlay(title, text, spinner) {
+	// 小窗模式放不下弹窗，把提示压进小窗标题条
+	if (state.mode === 'pip') {
+		setPipStatus(text ? `${title} · ${text}` : title);
+		return;
+	}
 	const overlay = $('#player-overlay');
 	overlay.classList.remove('hidden');
 	$('#overlay-title').textContent = title;
@@ -1055,14 +1271,25 @@ function hideOverlay() {
 }
 
 async function stopSession() {
-	try {
-		await api.stop();
-	} catch {
-		/* ignore */
+	const wasControl = state.mode === 'control';
+	if (wasControl) {
+		try {
+			await api.stop();
+		} catch {
+			/* ignore */
+		}
 	}
 	cleanupPlayer();
-	await refreshState();
-	showView('home');
+	if (wasControl) {
+		await refreshState();
+		showView('home');
+	} else {
+		// 观战里的「返回」：不能停别人的会话，只是退出播放器
+		setPlayerMode(null);
+		showView('watch');
+		clearTimeout(state.liveTimer);
+		pollLive();
+	}
 }
 
 function cleanupPlayer() {
@@ -1156,6 +1383,12 @@ function bindStageGestures(canvas) {
 		if (e.pointerType === 'mouse' && e.button !== 0) return;
 		// 顶栏、弹窗、按钮上的点击不算手势
 		if (e.target.closest && e.target.closest('button, .hud, .overlay, .modal-backdrop, input, select')) return;
+		// 观战模式：画面只用来切换 HUD，绝不往 PS5 发输入
+		if (state.mode !== 'control') {
+			if (state.mode === 'pip') return;
+			$('#hud').classList.toggle('dim');
+			return;
+		}
 		surface.setPointerCapture(e.pointerId);
 
 		const rec = {
@@ -1451,6 +1684,74 @@ function phoneRumble(left, right) {
 	}, 110);
 }
 
+/* ---------------------------- 小窗拖拽 ---------------------------- */
+
+// 右上角小窗可以用标题条拖着走；松手吸附到最近的角。
+// 位置存 localStorage，下次进来还在老地方。
+const PIP_POS_KEY = 'ps5web.pip';
+
+function bindPipDrag() {
+	const bar = $('#pip-bar');
+	const box = $('#view-player');
+	if (!bar || !box) return;
+
+	let drag = null;
+
+	bar.addEventListener('pointerdown', (e) => {
+		if (e.target.closest('button')) return;
+		const r = box.getBoundingClientRect();
+		drag = { id: e.pointerId, dx: e.clientX - r.left, dy: e.clientY - r.top, w: r.width, h: r.height, moved: false };
+		bar.setPointerCapture(e.pointerId);
+		e.preventDefault();
+	});
+
+	bar.addEventListener('pointermove', (e) => {
+		if (!drag || e.pointerId !== drag.id) return;
+		const x = Math.min(Math.max(4, e.clientX - drag.dx), window.innerWidth - drag.w - 4);
+		const y = Math.min(Math.max(4, e.clientY - drag.dy), window.innerHeight - drag.h - 4);
+		if (Math.abs(x - (drag.x ?? x)) > 3 || Math.abs(y - (drag.y ?? y)) > 3) drag.moved = true;
+		drag.x = x;
+		drag.y = y;
+		box.style.left = `${x}px`;
+		box.style.top = `${y}px`;
+		box.style.right = 'auto';
+	});
+
+	const finish = (e) => {
+		if (!drag || e.pointerId !== drag.id) return;
+		const pos = drag.moved ? { x: drag.x, y: drag.y } : null;
+		drag = null;
+		if (pos) {
+			try {
+				localStorage.setItem(PIP_POS_KEY, JSON.stringify(pos));
+			} catch {
+				/* ignore */
+			}
+		}
+	};
+	bar.addEventListener('pointerup', finish);
+	bar.addEventListener('pointercancel', finish);
+}
+
+function applyPipSavedPos() {
+	const box = $('#view-player');
+	if (!box) return;
+	let pos = null;
+	try {
+		pos = JSON.parse(localStorage.getItem(PIP_POS_KEY) || 'null');
+	} catch {
+		/* ignore */
+	}
+	if (!pos) {
+		box.style.left = box.style.top = box.style.right = '';
+		return;
+	}
+	// 先清掉 right 定位再用 left/top；越界的旧坐标直接丢弃
+	box.style.right = 'auto';
+	box.style.left = `${Math.min(pos.x || 0, window.innerWidth - 120)}px`;
+	box.style.top = `${Math.min(pos.y || 0, window.innerHeight - 80)}px`;
+}
+
 /* ---------------------------- 触摸板提示框 ---------------------------- */
 
 // 竖屏时画面在上半屏，虚线框要正好贴在画面上；横屏是固定居中的 32%×44%
@@ -1739,8 +2040,37 @@ function bindTapZoomGuard() {
 
 function bindStatic() {
 	bindTapZoomGuard();
+	bindPipDrag();
 
 	$('#login-form').addEventListener('submit', onLoginSubmit);
+	$('#btn-login-back').addEventListener('click', () => {
+		showView('watch');
+		pollLive();
+	});
+
+	$('#btn-take-control').addEventListener('click', requestControl);
+	$('#btn-admin').addEventListener('click', async () => {
+		showView('home');
+		await refreshState().catch(() => {});
+	});
+	$('#btn-hud-take').addEventListener('click', requestControl);
+	$('#btn-watch-refresh').addEventListener('click', () => {
+		clearTimeout(state.liveTimer);
+		pollLive();
+	});
+	$('#btn-watch-start').addEventListener('click', startWatchSession);
+	$('#btn-pip-expand').addEventListener('click', expandWatch);
+	$('#btn-exit-watch').addEventListener('click', exitToCover);
+	$('#btn-back-watch').addEventListener('click', async () => {
+		if (state.mode === 'control') {
+			// 从管理页回观战：保留 NAS 上的会话，只断开自己这条观众通道
+			teardownPlayer();
+			setPlayerMode(null);
+		}
+		showView('watch');
+		clearTimeout(state.liveTimer);
+		pollLive();
+	});
 
 	$('#btn-logout').addEventListener('click', async () => {
 		await api.logout();
@@ -1876,14 +2206,16 @@ async function main() {
 		);
 	}
 
-	$('#login-foot').textContent = '首次启动的密码打印在容器日志里，也可以用 PS5WEB_PASSWORD 指定。';
-
+	// 默认落在观战页：不用登录就能看到直播小窗
+	showView('watch');
 	try {
-		await refreshState();
-		showView('home');
-	} catch (err) {
-		showView('login');
+		await refreshState(); // 只有带有效 cookie 才拿得到
+		state.authed = true;
+		$('#btn-admin').classList.remove('hidden');
+	} catch {
+		state.authed = false;
 	}
+	pollLive();
 }
 
 main();

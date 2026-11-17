@@ -21,6 +21,9 @@ import { WsConnection } from './ws.js';
 
 const COOKIE_NAME = 'ps5web_token';
 
+// 访客自动开播的全局限流时刻
+let lastWatchStart = 0;
+
 function sign(exp) {
 	return createHmac('sha256', config.secret).update(String(exp)).digest('base64url');
 }
@@ -252,6 +255,48 @@ async function handleApi(req, res, url) {
 		return true;
 	}
 
+	// ---- 观战（无需登录，只读） ----
+	if (pathname === '/api/live') {
+		const st = engine.getStatus();
+		sendJson(res, 200, {
+			version: config.version,
+			state: st.state,
+			current: st.current
+				? { name: st.current.name, nickname: st.current.nickname || null }
+				: null,
+			viewers: st.viewers,
+			canStart: listHosts().some((h) => h.registKey && h.rpKey),
+		});
+		return true;
+	}
+
+	// 访客打开网站就自动开播（有人已经在看了则直接复用现有会话）。
+	// 加 30 秒冷却，防止不断刷新把 PS5 唤醒-断开来回折腾。
+	if (pathname === '/api/watch/start' && method === 'POST') {
+		if (engine.state === 'streaming' || engine.state === 'connecting') {
+			sendJson(res, 200, { session: engine.getStatus() });
+			return true;
+		}
+		if (Date.now() - lastWatchStart < 30_000) {
+			sendJson(res, 429, { error: '刚有人试过开播，请让主机缓一缓，30 秒后再刷新' });
+			return true;
+		}
+		const host = listHosts().find((h) => h.registKey && h.rpKey);
+		if (!host) {
+			sendJson(res, 409, { error: '房主还没有配对 PS5，暂时没得看' });
+			return true;
+		}
+		lastWatchStart = Date.now();
+		log.info(`访客自动开播: ${host.name}`);
+		try {
+			const status = await engine.start(host, {});
+			sendJson(res, 200, { session: status });
+		} catch (err) {
+			sendJson(res, 409, { error: err.message });
+		}
+		return true;
+	}
+
 	// ---- 以下都需要登录 ----
 	if (!isAuthed(req)) {
 		sendJson(res, 401, { error: '未登录' });
@@ -455,20 +500,17 @@ function handleUpgrade(req, socket) {
 		return;
 	}
 
-	if (!isAuthed(req)) {
-		socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
-		socket.destroy();
-		return;
-	}
-
+	// 观看谁都可以（匿名 = 只读）；发输入和控制指令需要登录
 	const conn = WsConnection.accept(req, socket);
 	if (!conn) return;
+	conn.control = isAuthed(req);
 
 	engine.addViewer(conn);
 
 	conn.on('message', (data, isBinary) => {
 		if (isBinary) {
 			// [0x01][28 字节手柄状态]
+			if (!conn.control) return;
 			if (data.length === 29 && data[0] === 0x01) {
 				engine.sendInput(data.subarray(1));
 			}
@@ -491,6 +533,7 @@ function handleUpgrade(req, socket) {
 				engine.requestIdr();
 				break;
 			case 'pin':
+				if (!conn.control) break;
 				engine.sendPin(String(msg.pin || ''));
 				break;
 			case 'diag':
@@ -498,6 +541,7 @@ function handleUpgrade(req, socket) {
 				break;
 
 			case 'stop':
+				if (!conn.control) break;
 				engine.stop();
 				break;
 			case 'stats':

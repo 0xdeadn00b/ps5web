@@ -700,7 +700,6 @@ body.immersive .insecure-banner {
 }
 
 /* ---------------------------- 屏幕按键 ---------------------------- */
-
 .touch-ui {
 	--ctl: var(--ctl-scale, 1); /* 按键整体缩放，由「按键布局」调节 */
 	--inset-scale: 1; /* 离屏幕边缘的距离系数（横向按倍数，纵向只跟一部分） */
@@ -1230,4 +1229,164 @@ kbd {
 	font-weight: 600;
 	box-shadow: 0 10px 24px rgba(0, 0, 0, 0.45);
 	backdrop-filter: blur(6px);
+}
+
+/* ---------------------------- 观战模式 ---------------------------- */
+
+#view-watch {
+	position: relative;
+	min-height: 100dvh;
+	padding: 24px;
+}
+
+.watch-cover {
+	position: absolute;
+	inset: 0;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	gap: 14px;
+	text-align: center;
+	padding: 28px;
+	background:
+		radial-gradient(900px 480px at 50% 18%, rgba(46, 139, 255, 0.14), transparent 60%),
+		var(--bg);
+	border-radius: var(--radius);
+}
+
+.watch-cover .muted {
+	max-width: 420px;
+}
+
+.watch-actions {
+	position: fixed;
+	left: 50%;
+	bottom: max(18px, env(safe-area-inset-bottom));
+	transform: translateX(-50%);
+	display: flex;
+	gap: 10px;
+	z-index: 60;
+	background: rgba(12, 18, 27, 0.72);
+	backdrop-filter: blur(10px);
+	padding: 10px 12px;
+	border-radius: 999px;
+	border: 1px solid var(--line);
+}
+
+/* 小窗形态：#view-player 缩成浮在页面上的卡片 */
+body.mode-pip #view-player {
+	position: fixed;
+	right: 12px;
+	top: max(12px, env(safe-area-inset-top));
+	left: auto;
+	width: min(340px, 44vw);
+	aspect-ratio: 16 / 9;
+	border-radius: 12px;
+	overflow: hidden;
+	box-shadow: 0 14px 40px rgba(0, 0, 0, 0.55);
+	border: 1px solid var(--line-hi);
+	z-index: 50;
+	cursor: default;
+}
+
+body.mode-pip .stage {
+	position: absolute;
+	inset: 0;
+	height: auto;
+	flex: none;
+}
+
+body.mode-pip .hud,
+body.mode-pip .touch-ui,
+body.mode-pip .pad-zone,
+body.mode-pip .audio-unlock,
+body.mode-pip .rumble-glow {
+	display: none !important;
+}
+
+body.mode-pip #player-overlay {
+	display: none !important;
+}
+
+.pip-bar {
+	display: none;
+}
+
+body.mode-pip .pip-bar {
+	display: flex;
+	position: absolute;
+	left: 0;
+	right: 0;
+	top: 0;
+	align-items: center;
+	gap: 6px;
+	padding: 5px 8px;
+	background: linear-gradient(180deg, rgba(0, 0, 0, 0.72), transparent);
+	color: #e9eff9;
+	font-size: 12px;
+	z-index: 12;
+	touch-action: none;
+	cursor: grab;
+}
+
+body.mode-pip .pip-bar:active {
+	cursor: grabbing;
+}
+
+body.mode-pip .pip-bar #pip-status {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	flex: 1;
+}
+
+.pip-btn {
+	border: none;
+	background: rgba(255, 255, 255, 0.14);
+	color: #fff;
+	font-size: 12px;
+	padding: 4px 10px;
+	border-radius: 8px;
+	flex: none;
+}
+
+/* 全屏观看：和操控布局一致，只是隐藏控制按钮 */
+body.mode-watch #view-player {
+	position: fixed;
+	inset: 0;
+	background: #000;
+}
+
+/* 操控模式恢复原布局 */
+body.mode-control #view-player {
+	position: fixed;
+	inset: 0;
+	background: #000;
+}
+
+@media (orientation: portrait) {
+	body.mode-pip #view-player {
+		width: min(300px, 62vw);
+		right: 10px;
+	}
+}
+
+/* 全屏观看没有按键区，画面吃满整屏（覆盖竖屏分屏规则） */
+body.mode-watch .stage {
+	position: relative;
+	flex: 1;
+	height: auto;
+	inset: auto;
+}
+
+/* 放大之后（观看/操控），底部的观战按钮条不该再露出来 */
+body.mode-watch .watch-actions,
+body.mode-control .watch-actions {
+	display: none;
+}
+
+body.mode-watch #view-player,
+body.mode-control #view-player {
+	z-index: 40;
 }
