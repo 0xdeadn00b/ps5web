@@ -224,7 +224,9 @@ function setPlayerMode(mode) {
 	if (mode === 'pip') {
 		showView('watch');
 		body.style.overflow = '';
-		applyPipSavedPos();
+		// 直播间嵌入形态：位置完全由 CSS 控制，清掉旧的拖拽坐标残留
+		player.style.left = player.style.top = player.style.right = player.style.bottom = '';
+		player.classList.remove('pip-moved');
 	} else {
 		body.style.overflow = 'hidden';
 		$('#view-player').style.left = $('#view-player').style.top = $('#view-player').style.right = '';
@@ -569,10 +571,27 @@ function exitToCover() {
 }
 
 async function expandWatch() {
-	// 放大是一个用户手势，借机解锁声音
+	// 放大是一个用户手势，借机解锁声音 + 申请真正的 F11 式全屏
 	state.audio?.enable?.().catch(() => {});
 	setPlayerMode('watch');
+	try {
+		if (!fullscreenElement() && nativeFullscreenAvailable()) {
+			const el = document.documentElement;
+			const req = el.requestFullscreen || el.webkitRequestFullscreen;
+			if (req) await req.call(el);
+		}
+	} catch {
+		/* 浏览器拒绝全屏就退回「铺满视口」的 watch 模式，不弹错误 */
+	}
 }
+
+// ESC / 退出全屏 = 收起直播间，回到小窗嵌入态
+document.addEventListener('fullscreenchange', () => {
+	if (!fullscreenElement() && state.mode === 'watch') {
+		// 从操控态进来的没有 room，交给退出按钮处理
+		if (state.controlMode === 'watch') setPlayerMode('pip');
+	}
+});
 
 async function pollLive() {
 	if ($('#view-watch').classList.contains('hidden')) return;
@@ -1740,7 +1759,10 @@ function bindStageGestures(canvas) {
 		if (e.target.closest && e.target.closest('button, .hud, .overlay, .modal-backdrop, input, select, .chat-bar')) return;
 		// 观战模式：画面只用来切换 HUD，绝不往 PS5 发输入
 		if (state.mode !== 'control') {
-			if (state.mode === 'pip') return;
+			if (state.mode === 'pip') {
+				expandWatch(); // 直播间形态：点画面 = 放大全屏
+				return;
+			}
 			$('#hud').classList.toggle('dim');
 			return;
 		}

@@ -1274,27 +1274,26 @@ kbd {
 	border: 1px solid var(--line);
 }
 
-/* 小窗形态：#view-player 缩成浮在页面上的卡片 */
+/* 直播间嵌入形态（仿 B 站/YY）：视频铺满左侧整块区域，右侧留给弹幕列表。
+   canvas 是 object-fit:contain，黑边自动居中，跟 B 站播放器一致。
+   .view 的 min-height:100% 对 fixed 盒子仍生效，必须清掉。 */
 body.mode-pip #view-player {
 	position: fixed;
-	right: 12px;
-	top: max(12px, env(safe-area-inset-top));
-	left: auto;
-	/* 关键：基础样式 inset:0 带来的 bottom 必须清掉，
-	   否则 top+bottom 同时定死，aspect-ratio 失效，小窗被拉成通高竖条 */
-	bottom: auto;
+	inset: 0 var(--room-side) 0 0;
+	width: auto;
 	height: auto;
-	/* 真正的元凶：.view 的 min-height:100% 会把固定定位的小窗
-	   拉到整屏高，aspect-ratio 直接失效 → 竖条 */
 	min-height: 0;
-	width: min(340px, 44vw);
-	aspect-ratio: 16 / 9;
-	border-radius: 12px;
+	border-radius: 0;
 	overflow: hidden;
-	box-shadow: 0 14px 40px rgba(0, 0, 0, 0.55);
-	border: 1px solid var(--line-hi);
-	z-index: 50;
-	cursor: default;
+	box-shadow: none;
+	border: none;
+	z-index: 45;
+	cursor: pointer; /* 点画面 = 放大全屏 */
+}
+
+/* 悬浮标题条不需要了 */
+body.mode-pip .pip-bar {
+	display: none !important;
 }
 
 body.mode-pip .stage {
@@ -1523,13 +1522,9 @@ body.mode-control .chat-bar {
 	background: rgba(255, 255, 255, 0.12);
 }
 
-/* 小窗模式：视频上照样飘弹幕（字小一号），底部悬浮发言栏换成右侧栏那份 */
+/* 小窗（直播间嵌入）模式：底部悬浮发言栏换成右侧栏那份 */
 body.mode-pip .chat-bar {
 	display: none !important;
-}
-
-body.mode-pip .dm {
-	font-size: 12px;
 }
 
 /* ---------------------------- 直播间布局（小窗观战态） ---------------------------- */
@@ -1657,17 +1652,15 @@ body.mode-pip .room-side {
 	border-radius: 999px;
 }
 
-/* 小窗默认位置避开右侧弹幕栏（用户拖过则以保存位置为准） */
-@media (orientation: landscape) and (min-width: 760px) {
-	body.mode-pip #view-player:not(.pip-moved) {
-		right: calc(var(--room-side) + 20px);
-	}
-}
-
+/* 竖屏：弹幕列表整块放底部，视频吃满其余区域 */
 @media (orientation: portrait) {
 	body.mode-pip .live-room {
 		grid-template-columns: 1fr;
-		grid-template-rows: min(34vh, 220px) 1fr;
+		grid-template-rows: 1fr min(38vh, 300px);
+	}
+
+	body.mode-pip #view-player {
+		inset: 0 0 min(38vh, 300px) 0;
 	}
 
 	body.mode-pip .room-side {
@@ -1675,7 +1668,7 @@ body.mode-pip .room-side {
 		border-top: 1px solid var(--line);
 	}
 
-	/* 竖屏下观战按钮条挪到左上角，别挡住弹幕输入 */
+	/* 观战按钮条挪到左上角浮在画面上，别挡住弹幕输入 */
 	body.mode-pip .watch-actions {
 		bottom: auto;
 		top: max(10px, env(safe-area-inset-top));
