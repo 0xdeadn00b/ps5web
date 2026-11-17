@@ -30,6 +30,7 @@ const state = {
 	mode: null, // null | 'pip' | 'watch' | 'control'
 	controlMode: 'watch', // 'watch' = 匿名只读通道；'control' = 登录后通道
 	authed: false,
+	pendingWatchStart: false,
 	liveTimer: 0,
 };
 
@@ -451,8 +452,9 @@ async function pollLive() {
 	} else {
 		$('#watch-cover').classList.remove('hidden');
 		$('#btn-watch-start').classList.toggle('hidden', !s.canStart);
+		$('#btn-watch-start').textContent = state.authed ? '开始观战' : '解锁并开播';
 		$('#watch-cover-text').textContent = s.canStart
-			? '现在没人在玩。点下面的按钮唤醒 PS5 开始观战（主机启动大约 30 秒）。'
+			? '现在没人在玩。开播会唤醒 PS5，需要访问密码（主机启动大约 30 秒）。'
 			: '房主还没有配对 PS5，暂时没有内容可看。';
 	}
 
@@ -466,6 +468,14 @@ async function startWatchSession() {
 	try {
 		await api.watchStart();
 	} catch (err) {
+		if (err.status === 401) {
+			// cookie 过期：回到解锁流程
+			state.authed = false;
+			state.pendingWatchStart = true;
+			toast('登录已过期，请重新输入密码', 'error');
+			showView('login');
+			return;
+		}
 		toast(err.message, 'error', 6000);
 	} finally {
 		$('#btn-watch-start').disabled = false;
@@ -479,6 +489,7 @@ async function startWatchSession() {
 
 async function requestControl() {
 	if (state.authed) return enterControlMode();
+	state.pendingWatchStart = false;
 	showView('login');
 }
 
@@ -531,7 +542,14 @@ async function onLoginSubmit(e) {
 		await api.login(input.value);
 		input.value = '';
 		state.authed = true;
-		await enterControlMode();
+		$('#btn-admin').classList.remove('hidden');
+		if (state.pendingWatchStart) {
+			// 观战封面点了「解锁并开播」：登录完直接把台开起来
+			state.pendingWatchStart = false;
+			await startWatchSession();
+		} else {
+			await enterControlMode();
+		}
 	} catch (err) {
 		error.textContent = err.message;
 	} finally {
@@ -2184,6 +2202,7 @@ function bindStatic() {
 
 	$('#login-form').addEventListener('submit', onLoginSubmit);
 	$('#btn-login-back').addEventListener('click', () => {
+		state.pendingWatchStart = false;
 		showView('watch');
 		pollLive();
 	});
@@ -2198,7 +2217,15 @@ function bindStatic() {
 		clearTimeout(state.liveTimer);
 		pollLive();
 	});
-	$('#btn-watch-start').addEventListener('click', startWatchSession);
+	$('#btn-watch-start').addEventListener('click', async () => {
+		if (!state.authed) {
+			// 唤醒主机是控制行为：先过密码，登录后自动接着开播
+			state.pendingWatchStart = true;
+			showView('login');
+			return;
+		}
+		await startWatchSession();
+	});
 	$('#btn-pip-expand').addEventListener('click', expandWatch);
 	$('#btn-exit-watch').addEventListener('click', exitToCover);
 	$('#btn-back-watch').addEventListener('click', async () => {

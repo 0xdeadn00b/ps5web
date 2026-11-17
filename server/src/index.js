@@ -270,9 +270,12 @@ async function handleApi(req, res, url) {
 		return true;
 	}
 
-	// 访客打开网站就自动开播（有人已经在看了则直接复用现有会话）。
-	// 加 30 秒冷却，防止不断刷新把 PS5 唤醒-断开来回折腾。
+	// 开播（唤醒 PS5）是控制行为，必须有密码；匿名观众只能看已经在播的会话
 	if (pathname === '/api/watch/start' && method === 'POST') {
+		if (!isAuthed(req)) {
+			sendJson(res, 401, { error: '唤醒主机需要密码' });
+			return true;
+		}
 		if (engine.state === 'streaming' || engine.state === 'connecting') {
 			sendJson(res, 200, { session: engine.getStatus() });
 			return true;
