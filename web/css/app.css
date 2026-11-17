@@ -1652,6 +1652,24 @@ body.mode-pip .room-side {
 	border-radius: 999px;
 }
 
+/* 直播间形态下播放/弹幕层都是 fixed 高 z，登录页和管理页必须盖过它们，
+   否则点「我要操控」后密码框藏在视频后面没法输入 */
+body.mode-pip #view-login,
+body.mode-watch #view-login,
+body.mode-control #view-login,
+body.mode-pip #view-home,
+body.mode-watch #view-home,
+body.mode-control #view-home {
+	position: fixed;
+	inset: 0;
+	z-index: 80;
+	overflow-y: auto;
+	padding: 24px 16px;
+	background:
+		radial-gradient(1200px 600px at 15% -10%, rgba(46, 139, 255, 0.16), transparent 60%),
+		radial-gradient(900px 500px at 100% 0%, rgba(46, 139, 255, 0.08), transparent 55%), var(--bg);
+}
+
 /* 竖屏：弹幕列表整块放底部，视频吃满其余区域 */
 @media (orientation: portrait) {
 	body.mode-pip .live-room {

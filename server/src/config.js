@@ -109,6 +109,6 @@ export const config = {
 	trustProxy: process.env.PS5WEB_TRUST_PROXY !== '0',
 
 	logLevel: process.env.PS5WEB_LOG_LEVEL || 'info',
-	version: '1.2.8',
+	version: '1.2.9',
 	chiakiVersion: '1.10.1',
 };
