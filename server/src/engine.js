@@ -104,6 +104,27 @@ class Engine extends EventEmitter {
 		}
 	}
 
+	/* ---------------- 弹幕 ---------------- */
+
+	/**
+	 * 观战弹幕：任何人（包括匿名观众）都能发。
+	 * 限速由调用方（HTTP 层按连接）负责，这里只做消毒和转发。
+	 */
+	chat(name, text) {
+		const clean = String(text || '')
+			.replace(/[\r\n\t]+/g, ' ')
+			.replace(/\s+/g, ' ')
+			.trim()
+			.slice(0, 100);
+		if (!clean) return false;
+		const who = String(name || '观众')
+			.replace(/[\r\n\t]/g, '')
+			.trim()
+			.slice(0, 16) || '观众';
+		this.broadcastJson({ t: 'chat', name: who, text: clean, ts: Date.now() });
+		return true;
+	}
+
 	#setState(state, extra = {}) {
 		if (this.state === state && !extra.force) {
 			// 状态没变也要把 current 同步给新状态

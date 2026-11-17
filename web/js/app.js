@@ -230,6 +230,7 @@ function setPlayerMode(mode) {
 
 	setTouchVisible(mode === 'control' && (window.matchMedia('(pointer: coarse)').matches || state.touchVisible));
 	syncModeButtons();
+	syncChatBar();
 	updatePadZone();
 }
 
@@ -243,6 +244,136 @@ function syncModeButtons() {
 function setPipStatus(text) {
 	const el = $('#pip-status');
 	if (el) el.textContent = text;
+}
+
+/* ------------------------------------------------------------------ */
+/* 弹幕（抖音式：从右往左飘，底部输入栏发言）                            */
+/* ------------------------------------------------------------------ */
+
+const NICK_KEY = 'ps5web.nick';
+const EMOJIS = [
+	'😀','😂','🤣','😊','😍','🤔','😎','😭','😱','🥶',
+	'👍','👏','🔥','💯','❤️','🎮','🕹️','🏆','⚽','🎯',
+	'😅','🙏','👀','💪','🤝','✌️','🥳','😴','🤡','👻',
+];
+
+// 6 条轨道轮着用，同轨道追尾时自动错开
+const DANMAKU_LANES = 6;
+const danmakuLanes = new Array(DANMAKU_LANES).fill(0);
+let danmakuCount = 0;
+
+function myNick() {
+	let n = '';
+	try {
+		n = localStorage.getItem(NICK_KEY) || '';
+	} catch {
+		/* ignore */
+	}
+	return n || '观众' + Math.floor(1000 + Math.random() * 9000);
+}
+
+function laneFreeMs(el, durationMs) {
+	// 粗略：本条飘完 + 一点余量后轨道可复用
+	return durationMs + 400;
+}
+
+function spawnDanmaku(name, text, mine) {
+	// 小窗放不下弹幕，只在全屏观看/操控时飘
+	if (state.mode !== 'watch' && state.mode !== 'control') return;
+	const host = $('#danmaku');
+	if (!host) return;
+	if (danmakuCount > 40) return; // 屏幕太挤就静默丢弃后来的
+
+	const el = document.createElement('div');
+	el.className = 'dm' + (mine ? ' dm-mine' : '');
+	if (name) {
+		const tag = document.createElement('span');
+		tag.className = 'dm-name';
+		tag.textContent = name + '：';
+		el.append(tag);
+	}
+	el.append(document.createTextNode(text));
+
+	// 选最早空闲的轨道
+	const now = performance.now();
+	let lane = 0;
+	let best = Infinity;
+	for (let i = 0; i < DANMAKU_LANES; i++) {
+		if (danmakuLanes[i] < best) {
+			best = danmakuLanes[i];
+			lane = i;
+		}
+	}
+
+	host.append(el);
+	danmakuCount++;
+
+	const width = el.offsetWidth || 200;
+	const distance = host.clientWidth + width + 40;
+	const duration = Math.min(12, Math.max(6, distance / 130)) * 1000; // ~130px/s
+	const topPct = 4 + (lane * 88) / (DANMAKU_LANES - 1);
+	el.style.top = `${topPct}%`;
+	el.style.setProperty('--dm-x', `-${distance}px`);
+	el.style.animationDuration = `${duration}ms`;
+	danmakuLanes[lane] = now + laneFreeMs(el, duration);
+
+	el.addEventListener('animationend', () => {
+		el.remove();
+		danmakuCount--;
+	});
+}
+
+function sendChat() {
+	const input = $('#chat-input');
+	const text = (input.value || '').trim();
+	if (!text || !state.socket?.connected) return;
+	if (!state.socket.sendJson({ t: 'chat', name: myNick(), text })) {
+		toast('连接断了，弹幕发不出去', 'error');
+		return;
+	}
+	input.value = '';
+	input.blur();
+}
+
+function bindChatBar() {
+	const bar = $('#chat-bar');
+	const input = $('#chat-input');
+	const pop = $('#emoji-pop');
+
+	bar.addEventListener('submit', (e) => {
+		e.preventDefault();
+		sendChat();
+	});
+
+	// 表情面板
+	for (const em of EMOJIS) {
+		pop.append(
+			h('button', {
+				type: 'button',
+				class: 'emoji-item',
+				text: em,
+				onclick: () => {
+					input.value += em;
+					input.focus();
+				},
+			})
+		);
+	}
+	$('#btn-emoji').addEventListener('click', () => {
+		pop.classList.toggle('hidden');
+	});
+	document.addEventListener('pointerdown', (e) => {
+		if (!pop.classList.contains('hidden') && !e.target.closest('#chat-bar')) {
+			pop.classList.add('hidden');
+		}
+	});
+
+	// 输入时暂停页面级手势拦截没有意义（弹幕栏自己是 button/表单，手势层已跳过）
+}
+
+function syncChatBar() {
+	const show = state.mode === 'watch' || state.mode === 'control';
+	$('#chat-bar').classList.toggle('hidden', !show);
 }
 
 /** 打开（或复用）观战通道：匿名 WS，服务器只当它是观众 */
@@ -1105,6 +1236,14 @@ function onServerMessage(msg) {
 			openPinDialog(msg.incorrect);
 			break;
 
+		case 'chat':
+			spawnDanmaku(msg.name, msg.text, false);
+			break;
+
+		case 'chat_reject':
+			toast(msg.reason === 'slow' ? '慢一点，2 秒能发一条' : '说得够多啦，歇一小时再说', '', 2500);
+			break;
+
 		case 'rumble':
 			state.input?.handleRumble(msg.left, msg.right);
 			phoneRumble(msg.left, msg.right);
@@ -1382,7 +1521,7 @@ function bindStageGestures(canvas) {
 	surface.addEventListener('pointerdown', (e) => {
 		if (e.pointerType === 'mouse' && e.button !== 0) return;
 		// 顶栏、弹窗、按钮上的点击不算手势
-		if (e.target.closest && e.target.closest('button, .hud, .overlay, .modal-backdrop, input, select')) return;
+		if (e.target.closest && e.target.closest('button, .hud, .overlay, .modal-backdrop, input, select, .chat-bar')) return;
 		// 观战模式：画面只用来切换 HUD，绝不往 PS5 发输入
 		if (state.mode !== 'control') {
 			if (state.mode === 'pip') return;
@@ -2041,6 +2180,7 @@ function bindTapZoomGuard() {
 function bindStatic() {
 	bindTapZoomGuard();
 	bindPipDrag();
+	bindChatBar();
 
 	$('#login-form').addEventListener('submit', onLoginSubmit);
 	$('#btn-login-back').addEventListener('click', () => {

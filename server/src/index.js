@@ -529,6 +529,23 @@ function handleUpgrade(req, socket) {
 				// 回传客户端发送时刻（算 RTT）+ 服务端当前时间（算时钟偏移）
 				conn.send(JSON.stringify({ t: 'pong', echo: msg.ts, now: Date.now() }));
 				break;
+			case 'chat': {
+				// 弹幕：匿名也能发，每连接 2 秒 1 条 + 每小时 300 条
+				const now = Date.now();
+				conn.chatHistory = (conn.chatHistory || []).filter((t) => now - t < 3600_000);
+				if (conn.lastChatAt && now - conn.lastChatAt < 2000) {
+					conn.send(JSON.stringify({ t: 'chat_reject', reason: 'slow' }));
+					break;
+				}
+				if (conn.chatHistory.length >= 300) {
+					conn.send(JSON.stringify({ t: 'chat_reject', reason: 'limit' }));
+					break;
+				}
+				conn.lastChatAt = now;
+				conn.chatHistory.push(now);
+				engine.chat(msg.name, msg.text);
+				break;
+			}
 			case 'idr':
 				engine.requestIdr();
 				break;

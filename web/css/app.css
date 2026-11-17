@@ -1390,3 +1390,134 @@ body.mode-watch #view-player,
 body.mode-control #view-player {
 	z-index: 40;
 }
+
+/* ---------------------------- 弹幕 ---------------------------- */
+
+.danmaku {
+	position: absolute;
+	inset: 0;
+	pointer-events: none;
+	overflow: hidden;
+	z-index: 9;
+}
+
+.dm {
+	position: absolute;
+	left: 100%;
+	white-space: nowrap;
+	color: #fff;
+	font-size: clamp(14px, 2.4vh, 20px);
+	font-weight: 600;
+	text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9), 0 0 10px rgba(0, 0, 0, 0.5);
+	will-change: transform;
+	animation-name: dm-fly;
+	animation-timing-function: linear;
+	animation-fill-mode: forwards;
+	max-width: 90vw;
+}
+
+.dm-name {
+	color: rgba(255, 255, 255, 0.55);
+	font-weight: 400;
+	font-size: 0.85em;
+}
+
+.dm-mine {
+	color: #ffd666;
+}
+
+@keyframes dm-fly {
+	to {
+		transform: translateX(var(--dm-x, -200vw));
+	}
+}
+
+.chat-bar {
+	position: absolute;
+	left: 50%;
+	transform: translateX(-50%);
+	bottom: max(14px, env(safe-area-inset-bottom));
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	z-index: 16;
+	width: min(480px, 92vw);
+	padding: 8px 10px;
+	background: rgba(10, 15, 23, 0.66);
+	backdrop-filter: blur(10px);
+	border: 1px solid var(--line);
+	border-radius: 999px;
+}
+
+/* 操控模式底部被屏幕按键占了，弹幕栏挪到 HUD 下面 */
+body.mode-control .chat-bar {
+	bottom: auto;
+	top: 58px;
+}
+
+.chat-bar input {
+	flex: 1;
+	min-width: 0;
+	background: rgba(255, 255, 255, 0.08);
+	border: 1px solid transparent;
+	border-radius: 999px;
+	padding: 8px 14px;
+	color: var(--text);
+}
+
+.chat-bar input:focus {
+	outline: none;
+	border-color: var(--accent-dim);
+}
+
+.chat-send {
+	flex: none;
+	border: none;
+	background: var(--accent);
+	color: #fff;
+	font-weight: 600;
+	padding: 8px 16px;
+	border-radius: 999px;
+}
+
+.chat-emoji {
+	flex: none;
+	border: none;
+	background: transparent;
+	font-size: 20px;
+	padding: 4px 6px;
+	line-height: 1;
+}
+
+.emoji-pop {
+	position: absolute;
+	bottom: calc(100% + 8px);
+	left: 0;
+	width: min(320px, 88vw);
+	display: grid;
+	grid-template-columns: repeat(10, 1fr);
+	gap: 2px;
+	padding: 8px;
+	background: rgba(14, 20, 29, 0.96);
+	border: 1px solid var(--line-hi);
+	border-radius: 14px;
+	backdrop-filter: blur(10px);
+}
+
+.emoji-item {
+	border: none;
+	background: transparent;
+	font-size: 19px;
+	padding: 4px 0;
+	border-radius: 8px;
+}
+
+.emoji-item:active {
+	background: rgba(255, 255, 255, 0.12);
+}
+
+/* 小窗模式弹幕整体不可见 */
+body.mode-pip .danmaku,
+body.mode-pip .chat-bar {
+	display: none !important;
+}

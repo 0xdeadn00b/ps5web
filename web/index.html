@@ -119,6 +119,7 @@
 	</div>
 	<div class="stage" id="stage">
 		<canvas id="screen"></canvas>
+		<div class="danmaku" id="danmaku"></div>
 
 		<div class="hud" id="hud">
 			<div class="hud-left">
@@ -157,6 +158,14 @@
 	</div>
 
 	<button class="audio-unlock hidden" id="audio-unlock" type="button">点击启用声音</button>
+
+	<!-- 弹幕发言栏：观战/操控模式都可用 -->
+	<form class="chat-bar hidden" id="chat-bar" autocomplete="off">
+		<button type="button" class="chat-emoji" id="btn-emoji" title="表情">😀</button>
+		<input id="chat-input" placeholder="发个弹幕…" maxlength="60">
+		<button type="submit" class="chat-send" id="btn-chat-send">发送</button>
+		<div class="emoji-pop hidden" id="emoji-pop"></div>
+	</form>
 </section>
 
 <div id="modal-root"></div>
