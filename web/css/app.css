@@ -1284,6 +1284,9 @@ body.mode-pip #view-player {
 	   否则 top+bottom 同时定死，aspect-ratio 失效，小窗被拉成通高竖条 */
 	bottom: auto;
 	height: auto;
+	/* 真正的元凶：.view 的 min-height:100% 会把固定定位的小窗
+	   拉到整屏高，aspect-ratio 直接失效 → 竖条 */
+	min-height: 0;
 	width: min(340px, 44vw);
 	aspect-ratio: 16 / 9;
 	border-radius: 12px;
