@@ -495,6 +495,9 @@ class Engine extends EventEmitter {
 			case 'error':
 				log.error(`桥接层错误 (${o.cmd || '-'}): ${o.message}`);
 				this.lastError = o.message;
+				// 要关键帧被主机短暂拒绝是常见的自愈过程（下一次 IDR 就会来），
+				// 不值得弹给每个观众看
+				if (o.cmd === 'idr') break;
 				this.broadcastJson({ t: 'error', message: o.message, cmd: o.cmd });
 
 				if (o.cmd === 'pair' && this.pendingPair) {

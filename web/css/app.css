@@ -1280,6 +1280,10 @@ body.mode-pip #view-player {
 	right: 12px;
 	top: max(12px, env(safe-area-inset-top));
 	left: auto;
+	/* 关键：基础样式 inset:0 带来的 bottom 必须清掉，
+	   否则 top+bottom 同时定死，aspect-ratio 失效，小窗被拉成通高竖条 */
+	bottom: auto;
+	height: auto;
 	width: min(340px, 44vw);
 	aspect-ratio: 16 / 9;
 	border-radius: 12px;
