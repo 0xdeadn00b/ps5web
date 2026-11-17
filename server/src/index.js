@@ -265,6 +265,9 @@ async function handleApi(req, res, url) {
 				? { name: st.current.name, nickname: st.current.nickname || null }
 				: null,
 			viewers: st.viewers,
+			anons: st.anons,
+			limit: config.maxViewers,
+			full: engine.viewerFull(),
 			canStart: listHosts().some((h) => h.registKey && h.rpKey),
 		});
 		return true;
@@ -290,9 +293,9 @@ async function handleApi(req, res, url) {
 			return true;
 		}
 		lastWatchStart = Date.now();
-		log.info(`访客自动开播: ${host.name}`);
+		log.info(`访客自动开播: ${host.name}（观战档 ${config.watchVideo.resolution}/${config.watchVideo.bitrate}k）`);
 		try {
-			const status = await engine.start(host, {});
+			const status = await engine.start(host, { preset: 'watch' });
 			sendJson(res, 200, { session: status });
 		} catch (err) {
 			sendJson(res, 409, { error: err.message });

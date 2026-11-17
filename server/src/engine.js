@@ -25,6 +25,7 @@ class Engine extends EventEmitter {
 
 		this.state = 'idle'; // idle | discovering | pairing | connecting | streaming
 		this.current = null; // { hostId, name, nickname }
+		this.sessionVideo = null; // 当前会话实际使用的档位（观战档可能是 720p/8M）
 		this.discovered = [];
 		this.audioFormat = null;
 		this.lastParams = null; // 最近一包 SPS/PPS，中途接入时补发
@@ -54,10 +55,39 @@ class Engine extends EventEmitter {
 			audio: this.audioFormat,
 			lastError: this.lastError,
 			viewers: this.viewers.size,
+			anons: this.anonViewers(),
+			video: this.sessionVideo,
 		};
 	}
 
+	/** 匿名观众数（控制通道的登录用户不计入上限） */
+	anonViewers() {
+		let n = 0;
+		for (const v of this.viewers) if (!v.control) n++;
+		return n;
+	}
+
+	/** 观众位是否已满（0 = 不限） */
+	viewerFull() {
+		return config.maxViewers > 0 && this.anonViewers() >= config.maxViewers;
+	}
+
 	addViewer(conn) {
+		// 带宽保护：匿名观众达到上限后新连接直接拒绝，
+		// 先告知原因再关闭；登录用户（控制通道）不受限制。
+		if (!conn.control && this.viewerFull()) {
+			try {
+				conn.send(
+					JSON.stringify({ t: 'full', limit: config.maxViewers })
+				);
+			} catch {
+				/* ignore */
+			}
+			// 4008 = 策略拒绝（close 帧不允许用 1008，用应用私有码位）
+			setTimeout(() => conn.close(4008), 50);
+			return;
+		}
+
 		this.viewers.add(conn);
 		conn.send(
 			JSON.stringify({
@@ -221,14 +251,18 @@ class Engine extends EventEmitter {
 			throw new Error('已经有一个会话在进行中');
 		}
 
+		// 观战开播（preset='watch'）走低码率档：观众是 N 倍上行的乘数，
+		// 720p/8M 在手机上够看，能把同样上行预算下的观众数翻倍。
+		const base = opts.preset === 'watch' ? config.watchVideo : config.video;
 		const video = {
-			resolution: opts.resolution || config.video.resolution,
-			fps: Number(opts.fps || config.video.fps),
-			bitrate: Number(opts.bitrate || config.video.bitrate),
-			codec: opts.codec || config.video.codec,
+			resolution: opts.resolution || base.resolution,
+			fps: Number(opts.fps || base.fps),
+			bitrate: Number(opts.bitrate || base.bitrate),
+			codec: opts.codec || base.codec,
 		};
 
 		this.current = { hostId: host.id, name: host.name };
+		this.sessionVideo = video;
 		this.audioFormat = null;
 		this.lastParams = null;
 		this.lastError = null;
@@ -305,6 +339,7 @@ class Engine extends EventEmitter {
 			if (this.state === 'connecting' || this.state === 'streaming') {
 				this.#setState('idle', { force: true });
 				this.current = null;
+				this.sessionVideo = null;
 			}
 		}, 4000).unref?.();
 	}
@@ -437,6 +472,7 @@ class Engine extends EventEmitter {
 			case 'session_ended':
 				clearTimeout(this.connectTimer);
 				this.current = null;
+				this.sessionVideo = null;
 				this.audioFormat = null;
 				this.#setState('idle');
 				break;

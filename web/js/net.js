@@ -70,9 +70,9 @@ export class StreamSocket {
 			}
 		};
 
-		ws.onclose = () => {
+		ws.onclose = (ev) => {
 			this.ws = null;
-			this.onClose();
+			this.onClose(ev.code);
 			if (!this.closedByUser) this.#scheduleRetry();
 		};
 

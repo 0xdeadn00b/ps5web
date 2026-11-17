@@ -92,10 +92,23 @@ export const config = {
 		codec: process.env.PS5WEB_CODEC || 'h264',
 	},
 
+	// 观战档：从「开始观战」(watch/start) 开出来的会话用这一档。
+	// 上行带宽 = 码率 × 观众数，给观众开的台没必要吃满 18M。
+	watchVideo: {
+		resolution: process.env.PS5WEB_WATCH_RESOLUTION || '720p',
+		fps: Number(process.env.PS5WEB_WATCH_FPS || 60),
+		bitrate: Number(process.env.PS5WEB_WATCH_BITRATE || 8000),
+		codec: process.env.PS5WEB_CODEC || 'h264',
+	},
+
+	// 匿名观众并发上限（0 = 不限）。登录用户的控制通道不计入。
+	// 默认 10：按观战档 8Mbps 算，最坏约占 80Mbps 上行。
+	maxViewers: Number(process.env.PS5WEB_MAX_VIEWERS || 10),
+
 	// 认为客户端是 HTTPS 的时候（反代）才给 cookie 加 Secure
 	trustProxy: process.env.PS5WEB_TRUST_PROXY !== '0',
 
 	logLevel: process.env.PS5WEB_LOG_LEVEL || 'info',
-	version: '1.2.2',
+	version: '1.2.3',
 	chiakiVersion: '1.10.1',
 };

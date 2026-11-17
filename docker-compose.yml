@@ -8,7 +8,7 @@
 services:
   ps5web:
     # 现成镜像（238MB，拉下来不到 100MB）
-    image: xiaobai9978/ps5web:1.2.2
+    image: xiaobai9978/ps5web:1.2.3
 
     # 想改代码自己构建，取消下面注释（会覆盖上面的 image）
     # build:
@@ -27,11 +27,16 @@ services:
       # 留空 = 首次启动随机生成，密码打印在 docker logs 里
       PS5WEB_PASSWORD: ""
       PS5WEB_PORT: "8080"
-      # 默认画质，前端每次开始前还能改
+      # 操控默认画质，前端每次开始前还能改
       PS5WEB_RESOLUTION: "1080p"
       PS5WEB_FPS: "60"
       PS5WEB_BITRATE: "18000"
       PS5WEB_CODEC: "h264"
+      # 观战开播档：上行带宽 = 码率 × 观众数，给观众开的台用低码率
+      PS5WEB_WATCH_RESOLUTION: "720p"
+      PS5WEB_WATCH_BITRATE: "8000"
+      # 匿名观众并发上限（0 = 不限）。8Mbps × 10 ≈ 80Mbps 上行封顶
+      PS5WEB_MAX_VIEWERS: "10"
       PS5WEB_LOG_LEVEL: "info"
       TZ: Asia/Shanghai
     volumes:

@@ -32,6 +32,7 @@ const state = {
 	authed: false,
 	pendingWatchStart: false,
 	liveTimer: 0,
+	viewersFull: false,
 };
 
 /* ---------------------------- 按键布局 ---------------------------- */
@@ -433,6 +434,22 @@ async function pollLive() {
 	state.session = { state: s.state, current: s.current };
 	updateStatusPill();
 	const live = s.state === 'streaming' || s.state === 'connecting';
+	// 观众位恢复空闲后允许再次尝试接入
+	if (!s.full) state.viewersFull = false;
+
+	if (live && s.full && (state.mode === null || state.mode === 'pip')) {
+		// 有人在播，但匿名观众位已满：显示排队封面，不发起 WS 连接
+		if (state.mode === 'pip') {
+			teardownPlayer();
+			setPlayerMode(null);
+		}
+		$('#watch-cover').classList.remove('hidden');
+		$('#btn-watch-start').classList.add('hidden');
+		$('#watch-cover-text').textContent = `当前观看人数已满（${s.anons}/${s.limit}），有人离开后会自动接入，别关页面…`;
+		clearTimeout(state.liveTimer);
+		state.liveTimer = setTimeout(pollLive, 6000);
+		return;
+	}
 
 	if (live) {
 		if (state.mode === 'pip' || state.mode === null) {
@@ -1149,7 +1166,17 @@ function preparePlayer() {
 		clearInterval(state.pingTimer);
 		state.pingTimer = setInterval(sendPing, 2000);
 	};
-	state.socket.onClose = () => {
+	state.socket.onClose = (code) => {
+		if (code === 4008) {
+			// 服务器观众位已满：别再自动重连，回到封面，由轮询决定何时再试
+			state.viewersFull = true;
+			teardownPlayer();
+			setPlayerMode(null);
+			showView('watch');
+			clearTimeout(state.liveTimer);
+			state.liveTimer = setTimeout(pollLive, 8000);
+			return;
+		}
 		if (state.mode === 'pip') {
 			setPipStatus('连接断开，重连中…');
 			clearTimeout(state.liveTimer);
