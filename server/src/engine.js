@@ -115,11 +115,12 @@ class Engine extends EventEmitter {
 			this.requestIdr();
 		}
 
-		this.broadcastJson({ t: 'viewers', count: this.viewers.size });
+		this.broadcastJson({ t: 'viewers', count: this.viewers.size, anons: this.anonViewers() });
 	}
 
 	removeViewer(conn) {
-		if (this.viewers.delete(conn)) this.broadcastJson({ t: 'viewers', count: this.viewers.size });
+		if (this.viewers.delete(conn))
+			this.broadcastJson({ t: 'viewers', count: this.viewers.size, anons: this.anonViewers() });
 	}
 
 	broadcastJson(obj) {

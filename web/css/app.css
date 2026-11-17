@@ -1516,8 +1516,228 @@ body.mode-control .chat-bar {
 	background: rgba(255, 255, 255, 0.12);
 }
 
-/* 小窗模式弹幕整体不可见 */
-body.mode-pip .danmaku,
+/* 小窗模式：视频上照样飘弹幕（字小一号），底部悬浮发言栏换成右侧栏那份 */
 body.mode-pip .chat-bar {
 	display: none !important;
+}
+
+body.mode-pip .dm {
+	font-size: 12px;
+}
+
+/* ---------------------------- 直播间布局（小窗观战态） ---------------------------- */
+
+:root {
+	--room-side: 300px;
+}
+
+.live-room {
+	display: none;
+}
+
+body.mode-pip .live-room {
+	display: grid;
+	grid-template-columns: 1fr var(--room-side);
+	position: fixed;
+	inset: 0;
+	pointer-events: none;
+}
+
+body.mode-pip .room-main {
+	/* 只是占位：真正的画面是悬浮的 #view-player，弹幕栏左侧还有观战按钮条 */
+	pointer-events: none;
+}
+
+body.mode-pip .room-side {
+	pointer-events: auto;
+	display: flex;
+	flex-direction: column;
+	min-height: 0;
+	background: rgba(12, 18, 27, 0.92);
+	border-left: 1px solid var(--line);
+	backdrop-filter: blur(10px);
+}
+
+.room-head {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 12px 14px 10px;
+	border-bottom: 1px solid var(--line);
+	font-size: 13px;
+	color: var(--text);
+	min-height: 44px;
+}
+
+.room-title {
+	font-weight: 600;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.room-viewers {
+	margin-left: auto;
+	color: var(--muted);
+	font-size: 12px;
+	flex: none;
+}
+
+.chat-list {
+	flex: 1;
+	min-height: 0;
+	overflow-y: auto;
+	padding: 8px 12px;
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	scrollbar-width: thin;
+}
+
+.chat-row {
+	font-size: 13px;
+	line-height: 1.45;
+	color: var(--text);
+	word-break: break-all;
+}
+
+.chat-row.mine {
+	color: #ffd666;
+}
+
+.chat-who {
+	font-weight: 600;
+	margin-right: 2px;
+}
+
+.room-input {
+	position: relative;
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	padding: 10px;
+	border-top: 1px solid var(--line);
+}
+
+.room-input input {
+	flex: 1;
+	min-width: 0;
+	background: rgba(255, 255, 255, 0.08);
+	border: 1px solid transparent;
+	border-radius: 999px;
+	padding: 8px 12px;
+	color: var(--text);
+	font-size: 13px;
+}
+
+.room-input input:focus {
+	outline: none;
+	border-color: var(--accent-dim);
+}
+
+/* 昵称徽章 */
+.nick-chip {
+	flex: none;
+	max-width: 96px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	border: 1px solid var(--line-hi);
+	background: rgba(255, 255, 255, 0.08);
+	color: var(--text);
+	font-size: 12px;
+	padding: 6px 10px;
+	border-radius: 999px;
+}
+
+/* 小窗默认位置避开右侧弹幕栏（用户拖过则以保存位置为准） */
+@media (orientation: landscape) and (min-width: 760px) {
+	body.mode-pip #view-player:not(.pip-moved) {
+		right: calc(var(--room-side) + 20px);
+	}
+}
+
+@media (orientation: portrait) {
+	body.mode-pip .live-room {
+		grid-template-columns: 1fr;
+		grid-template-rows: min(34vh, 220px) 1fr;
+	}
+
+	body.mode-pip .room-side {
+		border-left: none;
+		border-top: 1px solid var(--line);
+	}
+
+	/* 竖屏下观战按钮条挪到左上角，别挡住弹幕输入 */
+	body.mode-pip .watch-actions {
+		bottom: auto;
+		top: max(10px, env(safe-area-inset-top));
+		left: 12px;
+		transform: none;
+	}
+}
+
+/* ---------------------------- 昵称选择弹层 ---------------------------- */
+
+.nick-pop {
+	position: fixed;
+	inset: 0;
+	z-index: 90;
+	background: rgba(4, 8, 14, 0.72);
+	backdrop-filter: blur(6px);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	padding: 18px;
+}
+
+.nick-card {
+	width: min(440px, 94vw);
+	max-height: 84vh;
+	overflow-y: auto;
+	background: var(--card);
+	border: 1px solid var(--line-hi);
+	border-radius: 18px;
+	padding: 18px;
+	box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
+}
+
+.nick-title {
+	font-weight: 700;
+	margin-bottom: 12px;
+}
+
+.nick-grid {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+	margin-bottom: 14px;
+}
+
+.nick-item {
+	border: 1px solid var(--line);
+	background: rgba(255, 255, 255, 0.06);
+	font-size: 13px;
+	padding: 7px 12px;
+	border-radius: 999px;
+}
+
+.nick-item:active {
+	background: rgba(255, 255, 255, 0.14);
+}
+
+.nick-custom {
+	display: flex;
+	gap: 8px;
+	margin-bottom: 8px;
+}
+
+.nick-custom input {
+	flex: 1;
+	min-width: 0;
+	background: rgba(255, 255, 255, 0.08);
+	border: 1px solid var(--line);
+	border-radius: 10px;
+	padding: 10px 12px;
+	color: var(--text);
 }

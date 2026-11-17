@@ -253,6 +253,30 @@ function setPipStatus(text) {
 /* ------------------------------------------------------------------ */
 
 const NICK_KEY = 'ps5web.nick';
+
+// 默认昵称池：不想动脑就挑一个（弹幕列表里名字有专属色）
+const NICKS = [
+	'快乐手柄', '沙发玩家', '今晚不睡', '手残党本党', '吃瓜观众',
+	'路人甲', '摸鱼大师', '菜到抠脚', '高光制造机', '睡个午觉先',
+	'风灵月影宗', '一只咸鱼', '麦香鱼', '隔壁老王', '猫才无双',
+	'打铁的路人', '雾都孤儿', '不吃香菜', '小饼干', '摆烂冠军',
+	'深夜食堂', '路人乙', '会飞的鱼', '咕咕咕', '大司马本马',
+	'冷场担当', '气氛组组长', '专业捧哏', '无名氏', '游戏人间',
+	'一整个爱住', '太会了叭', '下饭操作', '乐子人', '路人丙',
+	'摸鱼选手', '躺分玩家', '偷学两招', '嘴强王者', '萌新报道',
+];
+const NICK_COLORS = [
+	'#ff8a8a', '#ffd666', '#7ee081', '#6ecbff', '#c79bff',
+	'#ff9ed2', '#6fe3d2', '#f0b46e', '#9db9ff', '#e88bff',
+];
+
+/** 昵称 → 稳定的颜色（同一人名字颜色不变） */
+function nickColor(name) {
+	let x = 0;
+	for (let i = 0; i < name.length; i++) x = (x * 31 + name.charCodeAt(i)) | 0;
+	return NICK_COLORS[Math.abs(x) % NICK_COLORS.length];
+}
+
 const EMOJIS = [
 	'😀','😂','🤣','😊','😍','🤔','😎','😭','😱','🥶',
 	'👍','👏','🔥','💯','❤️','🎮','🕹️','🏆','⚽','🎯',
@@ -271,7 +295,110 @@ function myNick() {
 	} catch {
 		/* ignore */
 	}
-	return n || '观众' + Math.floor(1000 + Math.random() * 9000);
+	return n;
+}
+
+function setNick(name) {
+	const clean = String(name || '').replace(/[\r\n\t]/g, '').trim().slice(0, 16);
+	if (!clean) return;
+	try {
+		localStorage.setItem(NICK_KEY, clean);
+	} catch {
+		/* ignore */
+	}
+	for (const el of document.querySelectorAll('#btn-nick, #btn-nick-2')) el.textContent = clean;
+}
+
+/** 没选过昵称就先选（弹选择器），选好了才放行发言 */
+function requireNick() {
+	if (myNick()) return true;
+	openNickPop();
+	return false;
+}
+
+function openNickPop() {
+	$('#nick-pop')?.classList.remove('hidden');
+}
+
+function bindNickPop() {
+	const pop = $('#nick-pop');
+	const grid = $('#nick-grid');
+	if (!pop || !grid) return;
+
+	for (const name of NICKS) {
+		grid.append(
+			h('button', {
+				type: 'button',
+				class: 'nick-item',
+				text: name,
+				style: `color:${nickColor(name)}`,
+				onclick: () => {
+					setNick(name);
+					pop.classList.add('hidden');
+					$('#room-input')?.focus();
+					toast(`昵称已设置为「${name}」`);
+				},
+			})
+		);
+	}
+
+	$('#nick-custom').addEventListener('submit', (e) => {
+		e.preventDefault();
+		const input = $('#nick-input');
+		const v = (input.value || '').trim();
+		if (!v) return;
+		setNick(v);
+		input.value = '';
+		pop.classList.add('hidden');
+		toast(`昵称已设置为「${v}」`);
+	});
+
+	// 点卡片外的空白处关闭
+	pop.addEventListener('pointerdown', (e) => {
+		if (e.target === pop) pop.classList.add('hidden');
+	});
+
+	// 弹幕栏上的昵称徽章：点击更换
+	for (const id of ['btn-nick', 'btn-nick-2']) {
+		const btn = document.getElementById(id);
+		btn?.addEventListener('click', openNickPop);
+	}
+}
+
+/** 进入站点时同步一次昵称显示 */
+function syncNickButtons() {
+	const n = myNick() || '未设置';
+	for (const el of document.querySelectorAll('#btn-nick, #btn-nick-2')) el.textContent = n;
+}
+
+/* ---------------- 右侧竖列弹幕列表（小窗观战时） ---------------- */
+
+const CHAT_LIST_MAX = 80;
+
+function appendChatList(name, text, mine) {
+	const list = $('#chat-list');
+	if (!list) return;
+	const row = document.createElement('div');
+	row.className = 'chat-row' + (mine ? ' mine' : '');
+	const tag = document.createElement('span');
+	tag.className = 'chat-who';
+	tag.style.color = nickColor(name || '观众');
+	tag.textContent = (mine ? '我' : name) + '：';
+	row.append(tag, document.createTextNode(text));
+	list.append(row);
+	while (list.children.length > CHAT_LIST_MAX) list.firstChild.remove();
+	// 用户正在往上翻看时不强行拉回底部
+	const nearBottom = list.scrollHeight - list.scrollTop - list.clientHeight < 60;
+	if (nearBottom) list.scrollTop = list.scrollHeight;
+}
+
+function updateRoomHead(s) {
+	const t = $('#room-title');
+	if (t) t.textContent = s?.current?.nickname || s?.current?.name || '直播中';
+	const v = $('#room-viewers');
+	if (v && typeof s?.anons === 'number') {
+		v.textContent = s.limit > 0 ? `${s.anons}/${s.limit} 人在看` : `${s.anons} 人在看`;
+	}
 }
 
 function laneFreeMs(el, durationMs) {
@@ -280,8 +407,8 @@ function laneFreeMs(el, durationMs) {
 }
 
 function spawnDanmaku(name, text, mine) {
-	// 小窗放不下弹幕，只在全屏观看/操控时飘
-	if (state.mode !== 'watch' && state.mode !== 'control') return;
+	// 小窗也飘（字变小），全屏观看/操控正常飘
+	if (state.mode !== 'watch' && state.mode !== 'control' && state.mode !== 'pip') return;
 	const host = $('#danmaku');
 	if (!host) return;
 	if (danmakuCount > 40) return; // 屏幕太挤就静默丢弃后来的
@@ -325,10 +452,15 @@ function spawnDanmaku(name, text, mine) {
 	});
 }
 
-function sendChat() {
-	const input = $('#chat-input');
+function sendChat(inputSel) {
+	const input = $(inputSel);
 	const text = (input.value || '').trim();
-	if (!text || !state.socket?.connected) return;
+	if (!text) return;
+	if (!requireNick()) return;
+	if (!state.socket?.connected) {
+		toast('还没连上直播，发不出去', 'error');
+		return;
+	}
 	if (!state.socket.sendJson({ t: 'chat', name: myNick(), text })) {
 		toast('连接断了，弹幕发不出去', 'error');
 		return;
@@ -337,17 +469,22 @@ function sendChat() {
 	input.blur();
 }
 
-function bindChatBar() {
-	const bar = $('#chat-bar');
-	const input = $('#chat-input');
-	const pop = $('#emoji-pop');
-
-	bar.addEventListener('submit', (e) => {
+function bindRoomChat() {
+	// 右侧竖列底部的发言栏（小窗观战态）
+	$('#room-form')?.addEventListener('submit', (e) => {
 		e.preventDefault();
-		sendChat();
+		sendChat('#room-input');
 	});
+	$('#room-input')?.addEventListener('focus', () => {
+		if (!myNick()) openNickPop();
+	});
+	populateEmoji('#btn-emoji-room', '#emoji-pop-room', '#room-input');
+}
 
-	// 表情面板
+function populateEmoji(btnSel, popSel, inputSel) {
+	const pop = $(popSel);
+	const input = $(inputSel);
+	if (!pop || !input) return;
 	for (const em of EMOJIS) {
 		pop.append(
 			h('button', {
@@ -361,9 +498,28 @@ function bindChatBar() {
 			})
 		);
 	}
-	$('#btn-emoji').addEventListener('click', () => {
+	$(btnSel)?.addEventListener('click', (e) => {
+		e.stopPropagation();
 		pop.classList.toggle('hidden');
 	});
+	document.addEventListener('pointerdown', (e) => {
+		if (!pop.classList.contains('hidden') && !e.target.closest(popSel)) {
+			pop.classList.add('hidden');
+		}
+	});
+}
+
+function bindChatBar() {
+	const bar = $('#chat-bar');
+	const input = $('#chat-input');
+	const pop = $('#emoji-pop');
+
+	bar.addEventListener('submit', (e) => {
+		e.preventDefault();
+		sendChat('#chat-input');
+	});
+
+	populateEmoji('#btn-emoji', '#emoji-pop', '#chat-input');
 	document.addEventListener('pointerdown', (e) => {
 		if (!pop.classList.contains('hidden') && !e.target.closest('#chat-bar')) {
 			pop.classList.add('hidden');
@@ -432,7 +588,9 @@ async function pollLive() {
 	}
 
 	state.session = { state: s.state, current: s.current };
+	state.lastLive = s;
 	updateStatusPill();
+	updateRoomHead(s);
 	const live = s.state === 'streaming' || s.state === 'connecting';
 	// 观众位恢复空闲后允许再次尝试接入
 	if (!s.full) state.viewersFull = false;
@@ -1281,9 +1439,22 @@ function onServerMessage(msg) {
 			openPinDialog(msg.incorrect);
 			break;
 
-		case 'chat':
-			spawnDanmaku(msg.name, msg.text, false);
+		case 'viewers': {
+			const v = $('#room-viewers');
+			if (v) {
+				const n = typeof msg.anons === 'number' ? msg.anons : msg.count;
+				const limit = state.lastLive?.limit || 0;
+				v.textContent = limit > 0 ? `${n}/${limit} 人在看` : `${n} 人在看`;
+			}
 			break;
+		}
+
+		case 'chat': {
+			const mine = !!myNick() && msg.name === myNick();
+			spawnDanmaku(msg.name, msg.text, mine);
+			appendChatList(msg.name, msg.text, mine);
+			break;
+		}
 
 		case 'chat_reject':
 			toast(msg.reason === 'slow' ? '慢一点，2 秒能发一条' : '说得够多啦，歇一小时再说', '', 2500);
@@ -1906,6 +2077,7 @@ function bindPipDrag() {
 		const pos = drag.moved ? { x: drag.x, y: drag.y } : null;
 		drag = null;
 		if (pos) {
+			box.classList.add('pip-moved'); // 用户自己摆的位置，别再自动避让弹幕栏
 			try {
 				localStorage.setItem(PIP_POS_KEY, JSON.stringify(pos));
 			} catch {
@@ -1927,10 +2099,12 @@ function applyPipSavedPos() {
 		/* ignore */
 	}
 	if (!pos) {
+		box.classList.remove('pip-moved');
 		box.style.left = box.style.top = box.style.right = '';
 		return;
 	}
 	// 先清掉 right 定位再用 left/top；越界的旧坐标直接丢弃
+	box.classList.add('pip-moved');
 	box.style.right = 'auto';
 	box.style.left = `${Math.min(pos.x || 0, window.innerWidth - 120)}px`;
 	box.style.top = `${Math.min(pos.y || 0, window.innerHeight - 80)}px`;
@@ -2226,6 +2400,9 @@ function bindStatic() {
 	bindTapZoomGuard();
 	bindPipDrag();
 	bindChatBar();
+	bindRoomChat();
+	bindNickPop();
+	syncNickButtons();
 
 	$('#login-form').addEventListener('submit', onLoginSubmit);
 	$('#btn-login-back').addEventListener('click', () => {

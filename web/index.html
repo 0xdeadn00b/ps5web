@@ -35,6 +35,39 @@
 		<button class="primary" id="btn-take-control" type="button">我要操控</button>
 		<button class="ghost hidden" id="btn-admin" type="button">管理</button>
 	</div>
+
+	<!-- 直播间布局（仅小窗观战时显示）：左侧留给悬浮小窗，右侧竖列弹幕 -->
+	<div class="live-room" id="live-room">
+		<div class="room-main" id="room-main"></div>
+		<aside class="room-side">
+			<div class="room-head">
+				<span class="rec-dot"></span>
+				<span class="room-title" id="room-title">直播中</span>
+				<span class="room-viewers" id="room-viewers"></span>
+			</div>
+			<div class="chat-list" id="chat-list"></div>
+			<form class="room-input" id="room-form" autocomplete="off">
+				<button type="button" class="nick-chip" id="btn-nick" title="更换昵称">观众</button>
+				<button type="button" class="chat-emoji" id="btn-emoji-room" title="表情">😀</button>
+				<input id="room-input" placeholder="发个弹幕…" maxlength="60">
+				<button type="submit" class="chat-send">发送</button>
+				<div class="emoji-pop hidden" id="emoji-pop-room"></div>
+			</form>
+		</aside>
+	</div>
+
+	<!-- 昵称选择：几十个默认名随便挑，也可以自定义 -->
+	<div class="nick-pop hidden" id="nick-pop">
+		<div class="nick-card">
+			<div class="nick-title">挑个昵称发弹幕</div>
+			<div class="nick-grid" id="nick-grid"></div>
+			<form class="nick-custom" id="nick-custom">
+				<input id="nick-input" placeholder="或自定义一个…" maxlength="16">
+				<button class="primary" type="submit">就用这个</button>
+			</form>
+			<p class="muted">选好后可随时点弹幕栏左侧的昵称更换</p>
+		</div>
+	</div>
 </section>
 
 <!-- ------------------------------ 登录 ------------------------------ -->
@@ -161,6 +194,7 @@
 
 	<!-- 弹幕发言栏：观战/操控模式都可用 -->
 	<form class="chat-bar hidden" id="chat-bar" autocomplete="off">
+		<button type="button" class="nick-chip" id="btn-nick-2" title="更换昵称">观众</button>
 		<button type="button" class="chat-emoji" id="btn-emoji" title="表情">😀</button>
 		<input id="chat-input" placeholder="发个弹幕…" maxlength="60">
 		<button type="submit" class="chat-send" id="btn-chat-send">发送</button>
