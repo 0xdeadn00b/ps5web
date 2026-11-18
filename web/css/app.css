@@ -1464,6 +1464,13 @@ body.mode-control .chat-bar {
 	top: calc(58px + env(safe-area-inset-top, 0px));
 }
 
+/* 手机（触屏）操控界面：屏幕按键已经够挤，不再显示弹幕发言栏（弹幕照常飘） */
+@media (pointer: coarse) {
+	body.mode-control .chat-bar {
+		display: none !important;
+	}
+}
+
 .chat-bar input {
 	flex: 1;
 	min-width: 0;
