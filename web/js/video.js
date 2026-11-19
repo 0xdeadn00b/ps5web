@@ -12,8 +12,8 @@ function hex2(n) {
 	return n.toString(16).toUpperCase().padStart(2, '0');
 }
 
-function firstStartCode(buf) {
-	for (let i = 0; i + 3 < buf.length; i++) {
+function firstStartCode(buf, from = 0) {
+	for (let i = from; i + 3 < buf.length; i++) {
 		if (buf[i] === 0 && buf[i + 1] === 0 && buf[i + 2] === 1) return i + 3;
 	}
 	return -1;
@@ -21,7 +21,7 @@ function firstStartCode(buf) {
 
 /** 从参数集（SPS/PPS 或 VPS/SPS/PPS）里推导 RFC 6381 的 codec 字符串 */
 function codecString(buf) {
-	const p = firstStartCode(buf);
+	let p = firstStartCode(buf);
 	if (p < 0 || p >= buf.length) return null;
 
 	const hdr = buf[p];
@@ -31,8 +31,11 @@ function codecString(buf) {
 		return `avc1.${hex2(buf[p + 1])}${hex2(buf[p + 2])}${hex2(buf[p + 3])}`;
 	}
 
-	// HEVC: nal_unit_type == 33
-	if (((hdr >> 1) & 0x3f) === 33) {
+	// HEVC: the VPS can precede the SPS in an Annex B parameter packet.
+	while (p >= 0 && ((buf[p] >> 1) & 0x3f) !== 33) {
+	  p = firstStartCode(buf, p + 1);
+	}
+	if (p >= 0) {
 		const rb = p + 2; // 跳过 2 字节 NAL header
 		if (rb + 13 > buf.length) return null;
 
