@@ -379,6 +379,7 @@ async function handleApi(req, res, url) {
 			const body = await readJsonBody(req);
 			const patch = {};
 			if (body.name !== undefined) patch.name = String(body.name).trim().slice(0, 40);
+			if (body.note !== undefined) patch.note = String(body.note).trim().slice(0, 120);
 			if (body.accountId !== undefined) patch.accountId = String(body.accountId).trim().slice(0, 64);
 			if (Object.keys(patch).length) updateHost(host.id, patch);
 			sendJson(res, 200, { host: publicHost(getHost(host.id)) });

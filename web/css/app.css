@@ -430,6 +430,15 @@ option {
 	color: var(--muted);
 }
 
+.host-card .hc-note {
+	margin-top: 4px;
+	font-size: 12px;
+	line-height: 1.45;
+	color: var(--muted);
+	white-space: pre-wrap;
+	word-break: break-word;
+}
+
 .host-card .hc-state {
 	font-size: 11px;
 	padding: 3px 8px;

@@ -60,6 +60,7 @@ export function addHost({ name, address, ps5 = true }) {
 	const host = {
 		id: randomBytes(4).toString('hex'),
 		name: cleanName,
+		note: '',
 		address,
 		ps5: !!ps5,
 		registKey: '',
@@ -97,6 +98,7 @@ export function publicHost(host) {
 	return {
 		id: host.id,
 		name: host.name,
+		note: host.note || '',
 		address: host.address,
 		ps5: !!host.ps5,
 		mac: host.mac || '',

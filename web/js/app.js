@@ -826,6 +826,13 @@ function hostCard(host) {
 					}
 			  })
 			: null,
+		host.paired
+			? h('button', {
+					class: 'ghost',
+					text: '重配对',
+					onclick: () => openPairDialog(host),
+			  })
+			: null,
 		h('button', {
 			class: 'ghost',
 			text: '编辑',
@@ -859,6 +866,7 @@ function hostCard(host) {
 			h('div', {}, [
 				h('div', { class: 'hc-name', text: host.name }),
 				h('div', { class: 'hc-addr mono', text: host.address + (host.mac ? ` · ${host.mac}` : '') }),
+				host.note ? h('div', { class: 'hc-note', text: host.note }) : null,
 			]),
 			h('span', {
 				class: 'hc-state ' + (host.paired ? 'paired' : 'unpaired'),
@@ -869,9 +877,10 @@ function hostCard(host) {
 	]);
 }
 
-/** 编辑主机：改名 + 查看/修改 PSN Account-ID（国服/港服各一条时靠名字区分） */
+/** 编辑主机：改名 + 备注 + 查看/修改 PSN Account-ID（国服/港服各一条时靠名字区分） */
 function openEditHostDialog(host) {
 	const nameInput = h('input', { value: host.name || '', maxlength: '40', placeholder: '主机名称，如「小白PS5·港服」' });
+	const noteInput = h('input', { value: host.note || '', maxlength: '120', placeholder: '备注，如「给儿子留的号 / 周五晚家庭时间」' });
 	const accountInput = h('input', {
 		value: host.accountId || '',
 		autocomplete: 'off',
@@ -881,9 +890,10 @@ function openEditHostDialog(host) {
 	const body = h('div', {}, [
 		h('p', { class: 'muted small', text: `地址 ${host.address}（同一台 PS5 可以添加多条，不同 PSN 账号各配对一次，用名称区分）` }),
 		h('label', { class: 'field' }, [h('span', { text: '名称' }), nameInput]),
+		h('label', { class: 'field' }, [h('span', { text: '备注' }), noteInput]),
 		h('label', { class: 'field' }, [h('span', { text: 'PSN Account-ID' }), accountInput]),
 		host.paired
-			? h('p', { class: 'muted small', text: '改 Account-ID 只更新记录，不重新配对；换 PSN 账号请删掉这条后重新「配对」。' })
+			? h('p', { class: 'muted small', text: '改 Account-ID 只更新记录；连不上/凭据失效（如 PS5 上取消过关联）请回列表点「重配对」。' })
 			: h('p', { class: 'muted small', text: '这台还没配对，配对时也会以这里的 Account-ID 为准。' }),
 	]);
 
@@ -894,7 +904,11 @@ function openEditHostDialog(host) {
 			return false;
 		}
 		try {
-			await api.patchHost(host.id, { name, accountId: accountInput.value.trim() });
+			await api.patchHost(host.id, {
+				name,
+				note: noteInput.value.trim(),
+				accountId: accountInput.value.trim(),
+			});
 			await refreshState();
 			toast('已保存', 'ok');
 			return true;
@@ -987,12 +1001,14 @@ async function onAddHost(e) {
 /* ------------------------------------------------------------------ */
 
 function openPairDialog(host) {
+	const repair = !!host.paired;
 	const pinInput = h('input', {
 		placeholder: 'PS5 上显示的 8 位数字',
 		inputmode: 'numeric',
 		autocomplete: 'off',
 	});
 	const accountInput = h('input', {
+		value: host.accountId || '',
 		placeholder: 'PSN Account-ID（base64，8 字节）',
 		autocomplete: 'off',
 	});
@@ -1002,13 +1018,18 @@ function openPairDialog(host) {
 			text:
 				'1. 在 PS5 上打开「设置 → 系统 → 远程游玩 → 关联设备」，屏幕会显示 8 位 PIN。',
 		}),
-		h('p', {
-			text:
-				'2. 用电脑或手机打开 psn.flipscreen.games，登录后复制 Account-ID（base64 那串）。',
-		}),
+		repair
+			? h('p', {
+					text:
+						'2. PIN 每次打开该页面都会刷新，用最新的 PIN 重新配对即可；成功会覆盖旧凭据，这条记录继续用。',
+			  })
+			: h('p', {
+					text:
+						'2. 用电脑或手机打开 psn.flipscreen.games，登录后复制 Account-ID（base64 那串）。',
+			  }),
 		h('label', { class: 'field' }, [h('span', { text: 'PIN' }), pinInput]),
 		h('label', { class: 'field' }, [h('span', { text: 'PSN Account-ID' }), accountInput]),
-		h('p', { class: 'muted small', text: '配对只需要做一次，凭据保存在 NAS 本地。' }),
+		h('p', { class: 'muted small', text: '凭据保存在 NAS 本地，配一次就够；连不上多半是 PS5 那边取消过关联，重配对一次即可。' }),
 	]);
 
 	const submit = async () => {
@@ -1029,7 +1050,7 @@ function openPairDialog(host) {
 		try {
 			await api.pair(host.id, pin, accountId);
 			await refreshState();
-			toast('配对成功，可以直接串流了', 'ok');
+			toast(repair ? '重新配对成功，可以直接串流了' : '配对成功，可以直接串流了', 'ok');
 			return true;
 		} catch (err) {
 			toast(err.message, 'error', 6000);
@@ -1039,11 +1060,11 @@ function openPairDialog(host) {
 	};
 
 	openModal({
-		title: `配对 ${host.name}`,
+		title: `${repair ? '重新配对' : '配对'} ${host.name}`,
 		body,
 		actions: [
 			{ label: '取消', value: false },
-			{ label: '开始配对', primary: true, onClick: submit },
+			{ label: repair ? '重新配对' : '开始配对', primary: true, onClick: submit },
 		],
 	});
 }
