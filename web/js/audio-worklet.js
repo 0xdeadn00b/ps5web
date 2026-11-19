@@ -1,12 +1,14 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-//
-// PCM 环形缓冲。音频先攒到 targetMs 再播放，网络抖动被这里吸收。
+
+const STARTUP_BUFFER_MS = 30;
+const HIGH_WATER_MS = 120;
+const KEEP_AFTER_TRIM_MS = 60;
 
 class PcmQueue extends AudioWorkletProcessor {
 	constructor() {
 		super();
 
-		this.capacity = 1 << 17; // 131072 帧 ≈ 2.7s @48kHz
+		this.capacity = 1 << 17;
 		this.left = new Float32Array(this.capacity);
 		this.right = new Float32Array(this.capacity);
 		this.readPos = 0;
@@ -18,14 +20,17 @@ class PcmQueue extends AudioWorkletProcessor {
 		this.processed = 0;
 
 		const rate = sampleRate || 48000;
-		// 预充 30ms：比原来的 50ms 少一层缓冲，网络抖动大的话会有轻微爆音
-		this.targetSamples = Math.round((rate * 30) / 1000);
+		this.targetSamples = Math.round((rate * STARTUP_BUFFER_MS) / 1000);
+		this.highWaterSamples = Math.round((rate * HIGH_WATER_MS) / 1000);
+		this.keepSamples = Math.round((rate * KEEP_AFTER_TRIM_MS) / 1000);
 
 		this.port.onmessage = (e) => {
 			const msg = e.data;
 			if (!msg) return;
-			if (msg.type === 'samples') this.#write(msg.left, msg.right);
-			else if (msg.type === 'flush') {
+
+			if (msg.type === 'samples') {
+				this.#write(msg.left, msg.right);
+			} else if (msg.type === 'flush') {
 				this.size = 0;
 				this.readPos = 0;
 				this.writePos = 0;
@@ -38,9 +43,7 @@ class PcmQueue extends AudioWorkletProcessor {
 
 	#write(left, right) {
 		const n = left.length;
-		if (!n) return;
-
-		if (n > this.capacity) return;
+		if (!n || n > this.capacity) return;
 
 		if (this.size + n > this.capacity) {
 			const drop = this.size + n - this.capacity;
@@ -56,6 +59,18 @@ class PcmQueue extends AudioWorkletProcessor {
 
 		this.writePos = (this.writePos + n) % this.capacity;
 		this.size += n;
+
+		// Respect a custom startup target if it exceeds the default trim level.
+		const keep = Math.max(this.keepSamples, this.targetSamples);
+		const highWater = Math.max(
+			this.highWaterSamples,
+			keep + this.highWaterSamples - this.keepSamples
+		);
+		if (this.size > highWater) {
+			const drop = this.size - keep;
+			this.readPos = (this.readPos + drop) % this.capacity;
+			this.size -= drop;
+		}
 	}
 
 	process(inputs, outputs) {
