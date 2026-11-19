@@ -248,6 +248,7 @@ export function initLocale() {
 	}
 	for (const parent of document.querySelectorAll('.watch-actions, #view-home .topbar .row')) {
 		const select = document.createElement('select');
+		select.className = 'ps5web-language-select';
 		select.setAttribute('aria-label', t('语言'));
 		for (const [index, label] of ['English', '繁體中文', '简体中文'].entries()) {
 			const option = document.createElement('option');

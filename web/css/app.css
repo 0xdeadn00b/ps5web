@@ -1769,3 +1769,21 @@ body.mode-control #view-home {
 	padding: 10px 12px;
 	color: var(--text);
 }
+
+/* Keep the language name visible when the action row gets crowded. */
+.ps5web-language-select {
+  flex: none;
+  width: auto;
+  min-width: 7rem;
+}
+
+.watch-actions,
+#view-home .topbar > .row {
+  flex-wrap: wrap;
+}
+
+@media (max-width: 480px) {
+  #view-home .topbar {
+    flex-wrap: wrap;
+  }
+}
