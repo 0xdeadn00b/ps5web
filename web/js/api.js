@@ -31,6 +31,7 @@ export const api = {
 	discover: () => request('/api/discover', { method: 'POST' }),
 	addHost: (host) => request('/api/hosts', { method: 'POST', body: JSON.stringify(host) }),
 	renameHost: (id, name) => request(`/api/hosts/${id}`, { method: 'PATCH', body: JSON.stringify({ name }) }),
+	patchHost: (id, patch) => request(`/api/hosts/${id}`, { method: 'PATCH', body: JSON.stringify(patch) }),
 	removeHost: (id) => request(`/api/hosts/${id}`, { method: 'DELETE' }),
 	pair: (id, pin, accountId) =>
 		request(`/api/hosts/${id}/pair`, { method: 'POST', body: JSON.stringify({ pin, accountId }) }),

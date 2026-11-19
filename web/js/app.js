@@ -781,8 +781,10 @@ function renderHosts() {
 	$('#host-empty').classList.toggle('hidden', state.hosts.length > 0);
 
 	const wrap = $('#discovered-wrap');
+	// 同一台 PS5 可能有多条（国服/港服）：按「地址+名称」判断是否已添加，
+	// 只配过港服时，发现列表仍应保留入口以便再配一条国服
 	const discovered = state.discovered.filter(
-		(d) => !state.hosts.some((h2) => h2.address === d.address)
+		(d) => !state.hosts.some((h2) => h2.address === d.address && h2.name === (d.name || d.address))
 	);
 
 	if (discovered.length) {
@@ -825,6 +827,11 @@ function hostCard(host) {
 			  })
 			: null,
 		h('button', {
+			class: 'ghost',
+			text: '编辑',
+			onclick: () => openEditHostDialog(host),
+		}),
+		h('button', {
 			class: 'ghost danger',
 			text: '删除',
 			onclick: async () => {
@@ -860,6 +867,51 @@ function hostCard(host) {
 		]),
 		actions,
 	]);
+}
+
+/** 编辑主机：改名 + 查看/修改 PSN Account-ID（国服/港服各一条时靠名字区分） */
+function openEditHostDialog(host) {
+	const nameInput = h('input', { value: host.name || '', maxlength: '40', placeholder: '主机名称，如「小白PS5·港服」' });
+	const accountInput = h('input', {
+		value: host.accountId || '',
+		autocomplete: 'off',
+		placeholder: 'PSN Account-ID（base64，8 字节）',
+	});
+
+	const body = h('div', {}, [
+		h('p', { class: 'muted small', text: `地址 ${host.address}（同一台 PS5 可以添加多条，不同 PSN 账号各配对一次，用名称区分）` }),
+		h('label', { class: 'field' }, [h('span', { text: '名称' }), nameInput]),
+		h('label', { class: 'field' }, [h('span', { text: 'PSN Account-ID' }), accountInput]),
+		host.paired
+			? h('p', { class: 'muted small', text: '改 Account-ID 只更新记录，不重新配对；换 PSN 账号请删掉这条后重新「配对」。' })
+			: h('p', { class: 'muted small', text: '这台还没配对，配对时也会以这里的 Account-ID 为准。' }),
+	]);
+
+	const submit = async () => {
+		const name = nameInput.value.trim();
+		if (!name) {
+			toast('名称不能为空', 'error');
+			return false;
+		}
+		try {
+			await api.patchHost(host.id, { name, accountId: accountInput.value.trim() });
+			await refreshState();
+			toast('已保存', 'ok');
+			return true;
+		} catch (err) {
+			toast(err.message, 'error');
+			return false;
+		}
+	};
+
+	openModal({
+		title: `编辑 ${host.name}`,
+		body,
+		actions: [
+			{ label: '取消', value: false },
+			{ label: '保存', primary: true, onClick: submit },
+		],
+	});
 }
 
 function discoveredCard(d) {

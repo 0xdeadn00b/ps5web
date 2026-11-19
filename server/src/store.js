@@ -48,17 +48,23 @@ export function findByAddress(address) {
 	return state.hosts.find((h) => h.address === address) || null;
 }
 
+// 同一台 PS5 允许多条条目（国服/港服等不同 PSN 账号各配一次对）。
+// 去重条件从「同地址」放宽成「同地址 + 同名」，避免连点重复添加。
 export function addHost({ name, address, ps5 = true }) {
-	const existing = findByAddress(address);
+	const cleanName = name || address;
+	const existing = state.hosts.find(
+		(h) => h.address === address && h.name === cleanName
+	);
 	if (existing) return existing;
 
 	const host = {
 		id: randomBytes(4).toString('hex'),
-		name: name || address,
+		name: cleanName,
 		address,
 		ps5: !!ps5,
 		registKey: '',
 		rpKey: '',
+		accountId: '',
 		mac: '',
 		addedAt: Date.now(),
 		lastPairedAt: 0,
@@ -94,6 +100,7 @@ export function publicHost(host) {
 		address: host.address,
 		ps5: !!host.ps5,
 		mac: host.mac || '',
+		accountId: host.accountId || '',
 		paired: Boolean(host.registKey && host.rpKey),
 		lastPairedAt: host.lastPairedAt || 0,
 	};
