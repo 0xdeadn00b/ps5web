@@ -1779,11 +1779,20 @@ body.mode-control #view-home {
 
 .watch-actions,
 #view-home .topbar > .row {
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  justify-content: flex-start;
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: auto;
+  gap: 0.375rem;
 }
 
-@media (max-width: 480px) {
-  #view-home .topbar {
-    flex-wrap: wrap;
-  }
+.watch-actions > button,
+#view-home .topbar > .row > button {
+  flex: none;
+  white-space: nowrap;
+}
+
+#view-home .topbar {
+  flex-wrap: nowrap;
 }
