@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
+import { initLocale, localizedError, nicknames, t } from './i18n.js';
 import { api } from './api.js';
 import { StreamSocket } from './net.js';
 import { VideoPipeline } from './video.js';
@@ -160,11 +161,11 @@ function openModal({ title, body, actions = [], dismissable = true }) {
 }
 
 const STATE_TEXT = {
-	idle: '空闲',
-	discovering: '扫描中',
-	pairing: '配对中',
-	connecting: '连接中',
-	streaming: '串流中',
+	idle: t("空闲"),
+	discovering: t("扫描中"),
+	pairing: t("配对中"),
+	connecting: t("连接中"),
+	streaming: t("串流中"),
 };
 
 /**
@@ -176,16 +177,15 @@ function showInsecureBanner() {
 
 	const bar = h('div', { class: 'insecure-banner', id: 'insecure-banner' }, [
 		h('div', { class: 'ib-text' }, [
-			h('strong', { text: '当前是 http 访问，浏览器禁用了 WebCodecs 和手柄 API。' }),
+			h('strong', { text: t("当前是 http 访问，浏览器禁用了 WebCodecs 和手柄 API。") }),
 			h('span', {
 				text:
-					`画面会黑屏、手柄认不到。解决办法：用 https 打开本站；或把 ${location.origin} ` +
-					'加进 chrome://flags/#unsafely-treat-insecure-origin-as-secure 的白名单并重启浏览器。',
+					t('httpHelp', location.origin),
 			}),
 		]),
 		h('button', {
 			class: 'ghost small',
-			text: '知道了',
+			text: t("知道了"),
 			onclick: () => bar.remove(),
 		}),
 	]);
@@ -257,16 +257,7 @@ function setPipStatus(text) {
 const NICK_KEY = 'ps5web.nick';
 
 // 默认昵称池：不想动脑就挑一个（弹幕列表里名字有专属色）
-const NICKS = [
-	'快乐手柄', '沙发玩家', '今晚不睡', '手残党本党', '吃瓜观众',
-	'路人甲', '摸鱼大师', '菜到抠脚', '高光制造机', '睡个午觉先',
-	'风灵月影宗', '一只咸鱼', '麦香鱼', '隔壁老王', '猫才无双',
-	'打铁的路人', '雾都孤儿', '不吃香菜', '小饼干', '摆烂冠军',
-	'深夜食堂', '路人乙', '会飞的鱼', '咕咕咕', '大司马本马',
-	'冷场担当', '气氛组组长', '专业捧哏', '无名氏', '游戏人间',
-	'一整个爱住', '太会了叭', '下饭操作', '乐子人', '路人丙',
-	'摸鱼选手', '躺分玩家', '偷学两招', '嘴强王者', '萌新报道',
-];
+const NICKS = nicknames();
 const NICK_COLORS = [
 	'#ff8a8a', '#ffd666', '#7ee081', '#6ecbff', '#c79bff',
 	'#ff9ed2', '#6fe3d2', '#f0b46e', '#9db9ff', '#e88bff',
@@ -338,7 +329,7 @@ function bindNickPop() {
 					setNick(name);
 					pop.classList.add('hidden');
 					$('#room-input')?.focus();
-					toast(`昵称已设置为「${name}」`);
+					toast(t('nicknameSet', name));
 				},
 			})
 		);
@@ -352,7 +343,7 @@ function bindNickPop() {
 		setNick(v);
 		input.value = '';
 		pop.classList.add('hidden');
-		toast(`昵称已设置为「${v}」`);
+		toast(t('nicknameSet', v));
 	});
 
 	// 点卡片外的空白处关闭
@@ -369,7 +360,7 @@ function bindNickPop() {
 
 /** 进入站点时同步一次昵称显示 */
 function syncNickButtons() {
-	const n = myNick() || '未设置';
+	const n = myNick() || t("未设置");
 	for (const el of document.querySelectorAll('#btn-nick, #btn-nick-2')) el.textContent = n;
 }
 
@@ -384,8 +375,8 @@ function appendChatList(name, text, mine) {
 	row.className = 'chat-row' + (mine ? ' mine' : '');
 	const tag = document.createElement('span');
 	tag.className = 'chat-who';
-	tag.style.color = nickColor(name || '观众');
-	tag.textContent = (mine ? '我' : name) + '：';
+	tag.style.color = nickColor(name || t("观众"));
+	tag.textContent = (mine ? t("我") : name) + t("：");
 	row.append(tag, document.createTextNode(text));
 	list.append(row);
 	while (list.children.length > CHAT_LIST_MAX) list.firstChild.remove();
@@ -395,11 +386,11 @@ function appendChatList(name, text, mine) {
 }
 
 function updateRoomHead(s) {
-	const t = $('#room-title');
-	if (t) t.textContent = s?.current?.nickname || s?.current?.name || '直播中';
+	const roomTitle = $('#room-title');
+	if (roomTitle) roomTitle.textContent = s?.current?.nickname || s?.current?.name || t("直播中");
 	const v = $('#room-viewers');
 	if (v && typeof s?.anons === 'number') {
-		v.textContent = s.limit > 0 ? `${s.anons}/${s.limit} 人在看` : `${s.anons} 人在看`;
+		v.textContent = t('viewers', s.limit > 0 ? `${s.anons}/${s.limit}` : s.anons);
 	}
 }
 
@@ -420,7 +411,7 @@ function spawnDanmaku(name, text, mine) {
 	if (name) {
 		const tag = document.createElement('span');
 		tag.className = 'dm-name';
-		tag.textContent = name + '：';
+		tag.textContent = name + t("：");
 		el.append(tag);
 	}
 	el.append(document.createTextNode(text));
@@ -460,11 +451,11 @@ function sendChat(inputSel) {
 	if (!text) return;
 	if (!requireNick()) return;
 	if (!state.socket?.connected) {
-		toast('还没连上直播，发不出去', 'error');
+		toast(t("还没连上直播，发不出去"), 'error');
 		return;
 	}
 	if (!state.socket.sendJson({ t: 'chat', name: myNick(), text })) {
-		toast('连接断了，弹幕发不出去', 'error');
+		toast(t("连接断了，弹幕发不出去"), 'error');
 		return;
 	}
 	input.value = '';
@@ -600,7 +591,7 @@ async function pollLive() {
 	try {
 		s = await api.live();
 	} catch {
-		$('#watch-cover-text').textContent = '连不上服务器，稍后自动重试…';
+		$('#watch-cover-text').textContent = t("连不上服务器，稍后自动重试…");
 		clearTimeout(state.liveTimer);
 		state.liveTimer = setTimeout(pollLive, 5000);
 		return;
@@ -622,7 +613,7 @@ async function pollLive() {
 		}
 		$('#watch-cover').classList.remove('hidden');
 		$('#btn-watch-start').classList.add('hidden');
-		$('#watch-cover-text').textContent = `当前观看人数已满（${s.anons}/${s.limit}），有人离开后会自动接入，别关页面…`;
+		$('#watch-cover-text').textContent = t('roomFull', `${s.anons}/${s.limit}`);
 		clearTimeout(state.liveTimer);
 		state.liveTimer = setTimeout(pollLive, 6000);
 		return;
@@ -632,24 +623,24 @@ async function pollLive() {
 		if (state.mode === 'pip' || state.mode === null) {
 			$('#watch-cover').classList.add('hidden');
 			ensurePipStream();
-			setPipStatus(s.current?.nickname || s.current?.name || '直播中');
+			setPipStatus(s.current?.nickname || s.current?.name || t("直播中"));
 		} else if (state.mode === 'watch') {
-			setPipStatus(s.current?.nickname || s.current?.name || '直播中');
+			setPipStatus(s.current?.nickname || s.current?.name || t("直播中"));
 		}
 	} else if (state.mode === 'pip') {
 		// 直播在两次轮询之间结束了
 		exitToCover();
 		return;
 	} else if (state.mode === 'watch') {
-		showOverlay('直播已结束', '现在没人在玩了。', false);
+		showOverlay(t("直播已结束"), t("现在没人在玩了。"), false);
 		return;
 	} else {
 		$('#watch-cover').classList.remove('hidden');
 		$('#btn-watch-start').classList.toggle('hidden', !s.canStart);
-		$('#btn-watch-start').textContent = state.authed ? '开始观战' : '解锁并开播';
+		$('#btn-watch-start').textContent = state.authed ? t("开始观战") : t("解锁并开播");
 		$('#watch-cover-text').textContent = s.canStart
-			? '现在没人在玩。开播会唤醒 PS5，需要访问密码（主机启动大约 30 秒）。'
-			: '房主还没有配对 PS5，暂时没有内容可看。';
+			? t("现在没人在玩。开播会唤醒 PS5，需要访问密码（主机启动大约 30 秒）。")
+			: t("房主还没有配对 PS5，暂时没有内容可看。");
 	}
 
 	clearTimeout(state.liveTimer);
@@ -658,7 +649,7 @@ async function pollLive() {
 
 async function startWatchSession() {
 	$('#btn-watch-start').disabled = true;
-	$('#watch-cover-text').textContent = '正在唤醒主机…';
+	$('#watch-cover-text').textContent = t("正在唤醒主机…");
 	try {
 		await api.watchStart();
 	} catch (err) {
@@ -666,16 +657,16 @@ async function startWatchSession() {
 			// cookie 过期：回到解锁流程
 			state.authed = false;
 			state.pendingWatchStart = true;
-			toast('登录已过期，请重新输入密码', 'error');
+			toast(t("登录已过期，请重新输入密码"), 'error');
 			showView('login');
 			return;
 		}
-		toast(err.message, 'error', 6000);
+		toast(localizedError(err), 'error', 6000);
 	} finally {
 		$('#btn-watch-start').disabled = false;
 	}
 	$('#watch-cover').classList.add('hidden');
-	setPipStatus('连接中…');
+	setPipStatus(t("连接中…"));
 	ensurePipStream();
 	clearTimeout(state.liveTimer);
 	state.liveTimer = setTimeout(pollLive, 4000);
@@ -708,7 +699,7 @@ async function enterControlMode() {
 	preparePlayer();
 	setPlayerMode('control');
 	state.audio?.enable().then((ok) => {
-		if (!ok) toast('浏览器不支持 WebCodecs 音频解码，本次没有声音', 'error', 5000);
+		if (!ok) toast(t("浏览器不支持 WebCodecs 音频解码，本次没有声音"), 'error', 5000);
 	});
 }
 
@@ -745,7 +736,7 @@ async function onLoginSubmit(e) {
 			await enterControlMode();
 		}
 	} catch (err) {
-		error.textContent = err.message;
+		error.textContent = localizedError(err);
 	} finally {
 		btn.disabled = false;
 	}
@@ -800,7 +791,7 @@ function hostCard(host) {
 
 	const startBtn = h('button', {
 		class: 'primary',
-		text: host.paired ? '开始串流' : '配对',
+		text: host.paired ? t("开始串流") : t("配对"),
 		disabled: busy && host.paired,
 		onclick: () => (host.paired ? openStartDialog(host) : openPairDialog(host)),
 	});
@@ -810,14 +801,14 @@ function hostCard(host) {
 		host.paired
 			? h('button', {
 					class: 'ghost',
-					text: '唤醒',
+					text: t("唤醒"),
 					onclick: async (e) => {
 						e.target.disabled = true;
 						try {
 							await api.wake(host.id);
-							toast('已发送唤醒包（若无效，请检查 PS5 的远程游玩设置）', 'ok');
+							toast(t("已发送唤醒包（若无效，请检查 PS5 的远程游玩设置）"), 'ok');
 						} catch (err) {
-							toast(err.message, 'error');
+							toast(localizedError(err), 'error');
 						} finally {
 							e.target.disabled = false;
 						}
@@ -826,14 +817,14 @@ function hostCard(host) {
 			: null,
 		h('button', {
 			class: 'ghost danger',
-			text: '删除',
+			text: t("删除"),
 			onclick: async () => {
 				const ok = await openModal({
-					title: '删除这台主机？',
-					body: `会同时删除已保存的配对凭据：${host.name}`,
+					title: t("删除这台主机？"),
+					body: t('deleteCredentials', host.name),
 					actions: [
-						{ label: '取消', value: false },
-						{ label: '删除', primary: true, value: true },
+						{ label: t("取消"), value: false },
+						{ label: t("删除"), primary: true, value: true },
 					],
 				});
 				if (!ok) return;
@@ -841,7 +832,7 @@ function hostCard(host) {
 					await api.removeHost(host.id);
 					await refreshState();
 				} catch (err) {
-					toast(err.message, 'error');
+					toast(localizedError(err), 'error');
 				}
 			},
 		}),
@@ -855,7 +846,7 @@ function hostCard(host) {
 			]),
 			h('span', {
 				class: 'hc-state ' + (host.paired ? 'paired' : 'unpaired'),
-				text: host.paired ? '已配对' : '未配对',
+				text: host.paired ? t("已配对") : t("未配对"),
 			}),
 		]),
 		actions,
@@ -869,15 +860,15 @@ function discoveredCard(d) {
 				h('div', { class: 'hc-name', text: d.name || d.address }),
 				h('div', {
 					class: 'hc-addr mono',
-					text: `${d.address} · ${d.ps5 ? 'PS5' : 'PS4'} · ${d.state === 'standby' ? '待机' : '在线'}`,
+					text: `${d.address} · ${d.ps5 ? 'PS5' : 'PS4'} · ${d.state === 'standby' ? t("待机") : t("在线")}`,
 				}),
 			]),
-			h('span', { class: 'hc-state', text: d.state === 'standby' ? '待机' : '在线' }),
+			h('span', { class: 'hc-state', text: d.state === 'standby' ? t("待机") : t("在线") }),
 		]),
 		h('div', { class: 'hc-actions' }, [
 			h('button', {
 				class: 'primary',
-				text: '添加并配对',
+				text: t("添加并配对"),
 				onclick: async () => {
 					try {
 						const res = await api.addHost({ name: d.name || d.address, address: d.address, ps5: d.ps5 });
@@ -885,7 +876,7 @@ function discoveredCard(d) {
 						await refreshState();
 						openPairDialog(res.host);
 					} catch (err) {
-						toast(err.message, 'error');
+						toast(localizedError(err), 'error');
 					}
 				},
 			}),
@@ -896,20 +887,20 @@ function discoveredCard(d) {
 async function onDiscover() {
 	const btn = $('#btn-discover');
 	btn.disabled = true;
-	btn.textContent = '扫描中…';
+	btn.textContent = t("扫描中…");
 
 	try {
 		const res = await api.discover();
 		state.discovered = res.hosts || [];
 		renderHosts();
 		if (!state.discovered.length) {
-			toast('没有发现主机。确认 NAS 与 PS5 同网段，并且容器用的是 host 网络。', '', 5000);
+			toast(t("没有发现主机。确认 NAS 与 PS5 同网段，并且容器用的是 host 网络。"), '', 5000);
 		}
 	} catch (err) {
-		toast(err.message, 'error');
+		toast(localizedError(err), 'error');
 	} finally {
 		btn.disabled = false;
-		btn.textContent = '扫描局域网';
+		btn.textContent = t("扫描局域网");
 	}
 }
 
@@ -926,7 +917,7 @@ async function onAddHost(e) {
 		await refreshState();
 		openPairDialog(res.host);
 	} catch (err) {
-		toast(err.message, 'error');
+		toast(localizedError(err), 'error');
 	}
 }
 
@@ -936,38 +927,38 @@ async function onAddHost(e) {
 
 function openPairDialog(host) {
 	const pinInput = h('input', {
-		placeholder: 'PS5 上显示的 8 位数字',
+		placeholder: t("PS5 上显示的 8 位数字"),
 		inputmode: 'numeric',
 		autocomplete: 'off',
 	});
 	const accountInput = h('input', {
-		placeholder: 'PSN Account-ID（base64，8 字节）',
+		placeholder: t("PSN Account-ID（base64，8 字节）"),
 		autocomplete: 'off',
 	});
 
 	const body = h('div', {}, [
 		h('p', {
 			text:
-				'1. 在 PS5 上打开「设置 → 系统 → 远程游玩 → 关联设备」，屏幕会显示 8 位 PIN。',
+				t("1. 在 PS5 上打开「设置 → 系统 → 远程游玩 → 关联设备」，屏幕会显示 8 位 PIN。"),
 		}),
 		h('p', {
 			text:
-				'2. 用电脑或手机打开 psn.flipscreen.games，登录后复制 Account-ID（base64 那串）。',
+				t("2. 用电脑或手机打开 psn.flipscreen.games，登录后复制 Account-ID（base64 那串）。"),
 		}),
 		h('label', { class: 'field' }, [h('span', { text: 'PIN' }), pinInput]),
 		h('label', { class: 'field' }, [h('span', { text: 'PSN Account-ID' }), accountInput]),
-		h('p', { class: 'muted small', text: '配对只需要做一次，凭据保存在 NAS 本地。' }),
+		h('p', { class: 'muted small', text: t("配对只需要做一次，凭据保存在 NAS 本地。") }),
 	]);
 
 	const submit = async () => {
 		const pin = pinInput.value.trim();
 		const accountId = accountInput.value.trim();
 		if (!/^\d{5,10}$/.test(pin)) {
-			toast('PIN 应该是 8 位数字', 'error');
+			toast(t("PIN 应该是 8 位数字"), 'error');
 			return false;
 		}
 		if (!accountId) {
-			toast('请填写 PSN Account-ID', 'error');
+			toast(t("请填写 PSN Account-ID"), 'error');
 			return false;
 		}
 
@@ -977,21 +968,21 @@ function openPairDialog(host) {
 		try {
 			await api.pair(host.id, pin, accountId);
 			await refreshState();
-			toast('配对成功，可以直接串流了', 'ok');
+			toast(t("配对成功，可以直接串流了"), 'ok');
 			return true;
 		} catch (err) {
-			toast(err.message, 'error', 6000);
+			toast(localizedError(err), 'error', 6000);
 			btns.forEach((b) => (b.disabled = false));
 			return false;
 		}
 	};
 
 	openModal({
-		title: `配对 ${host.name}`,
+		title: t('pairConsole', host.name),
 		body,
 		actions: [
-			{ label: '取消', value: false },
-			{ label: '开始配对', primary: true, onClick: submit },
+			{ label: t("取消"), value: false },
+			{ label: t("开始配对"), primary: true, onClick: submit },
 		],
 	});
 }
@@ -1096,22 +1087,22 @@ function openStartDialog(host) {
 	const body = h('div', {}, [
 		h('p', {
 			class: 'muted small',
-			text: '码率越高画质越好，但上行带宽要跟上。远程玩建议 12–18 Mbps。选完会记住，下次默认还是这套。',
+			text: t("码率越高画质越好，但上行带宽要跟上。远程玩建议 12–18 Mbps。选完会记住，下次默认还是这套。"),
 		}),
 		h('div', { class: 'quality' }, [
-			h('div', { class: 'quality-row' }, [h('span', { text: '分辨率' }), resChips]),
-			h('div', { class: 'quality-row' }, [h('span', { text: '帧率' }), fpsChips]),
-			h('div', { class: 'quality-row' }, [h('span', { text: '码率' }), bitrateChips]),
+			h('div', { class: 'quality-row' }, [h('span', { text: t("分辨率") }), resChips]),
+			h('div', { class: 'quality-row' }, [h('span', { text: t("帧率") }), fpsChips]),
+			h('div', { class: 'quality-row' }, [h('span', { text: t("码率") }), bitrateChips]),
 		]),
 	]);
 
 	openModal({
-		title: `开始串流 · ${host.name}`,
+		title: t('startConsole', host.name),
 		body,
 		actions: [
-			{ label: '取消', value: false },
+			{ label: t("取消"), value: false },
 			{
-				label: '开始',
+				label: t("开始"),
 				primary: true,
 				onClick: () => {
 					// 不 await：立刻关弹窗进播放页，连接过程用覆盖层反馈
@@ -1134,33 +1125,33 @@ function openStartDialog(host) {
 function openLayoutDialog() {
 	const size = chipGroup(
 		[
-			{ value: 0.85, label: '小' },
-			{ value: 1, label: '标准' },
-			{ value: 1.2, label: '大' },
+			{ value: 0.85, label: t("小") },
+			{ value: 1, label: t("标准") },
+			{ value: 1.2, label: t("大") },
 		],
 		state.layout.ctl
 	);
 	const inset = chipGroup(
 		[
-			{ value: 0.6, label: '贴边' },
-			{ value: 1, label: '适中' },
-			{ value: 1.8, label: '靠里' },
-			{ value: 2.6, label: '很靠里' },
+			{ value: 0.6, label: t("贴边") },
+			{ value: 1, label: t("适中") },
+			{ value: 1.8, label: t("靠里") },
+			{ value: 2.6, label: t("很靠里") },
 		],
 		state.layout.inset,
 		{ columns: 4 }
 	);
 	const dpad = chipGroup(
 		[
-			{ value: 'on', label: '显示' },
-			{ value: 'off', label: '隐藏' },
+			{ value: 'on', label: t("显示") },
+			{ value: 'off', label: t("隐藏") },
 		],
 		state.layout.dpad ? 'on' : 'off'
 	);
 	const rumble = chipGroup(
 		[
-			{ value: 'auto', label: '自动' },
-			{ value: 'off', label: '关闭' },
+			{ value: 'auto', label: t("自动") },
+			{ value: 'off', label: t("关闭") },
 		],
 		state.layout.rumble || 'auto'
 	);
@@ -1174,33 +1165,33 @@ function openLayoutDialog() {
 	const body = h('div', {}, [
 		h('p', {
 			class: 'muted',
-			text: '改完立刻生效，只存在这台设备上。摇杆在下方，十字键和面板键在各自摇杆的正上方。',
+			text: t("改完立刻生效，只存在这台设备上。摇杆在下方，十字键和面板键在各自摇杆的正上方。"),
 		}),
-		h('div', { class: 'quality-row' }, [h('span', { text: '按键大小' }), size]),
-		h('div', { class: 'quality-row' }, [h('span', { text: '离边距离' }), inset]),
-		h('div', { class: 'quality-row' }, [h('span', { text: '十字键' }), dpad]),
-		h('div', { class: 'quality-row' }, [h('span', { text: '震动反馈' }), rumble]),
+		h('div', { class: 'quality-row' }, [h('span', { text: t("按键大小") }), size]),
+		h('div', { class: 'quality-row' }, [h('span', { text: t("离边距离") }), inset]),
+		h('div', { class: 'quality-row' }, [h('span', { text: t("十字键") }), dpad]),
+		h('div', { class: 'quality-row' }, [h('span', { text: t("震动反馈") }), rumble]),
 		h('p', {
 			class: 'muted small',
 			text: canVibrate
-				? '手柄震动会同时带动手机振一下（幅度没法调，只能用长短区分）。'
-				: 'iPhone 的浏览器没有震动 API（WebKit 从没实现），这里用屏幕边缘的柔光代替。',
+				? t("手柄震动会同时带动手机振一下（幅度没法调，只能用长短区分）。")
+				: t("iPhone 的浏览器没有震动 API（WebKit 从没实现），这里用屏幕边缘的柔光代替。"),
 		}),
 		h('button', {
 			class: 'ghost',
 			type: 'button',
-			text: '恢复默认',
+			text: t("恢复默认"),
 			onclick: () => {
 				saveLayout({ ...LAYOUT_DEFAULT });
-				toast('已恢复默认布局');
+				toast(t("已恢复默认布局"));
 			},
 		}),
 	]);
 
 	openModal({
-		title: '按键布局',
+		title: t("按键布局"),
 		body,
-		actions: [{ label: '完成', primary: true, value: true }],
+		actions: [{ label: t("完成"), primary: true, value: true }],
 	});
 }
 
@@ -1212,10 +1203,10 @@ async function startSession(host, opts) {
 
 	// 必须在用户手势里创建 AudioContext
 	state.audio.enable().then((ok) => {
-		if (!ok) toast('浏览器不支持 WebCodecs 音频解码，本次没有声音', 'error', 5000);
+		if (!ok) toast(t("浏览器不支持 WebCodecs 音频解码，本次没有声音"), 'error', 5000);
 	});
 
-	showOverlay('正在连接 PS5…', '主机在待机的话会自动唤醒，冷启动大概 30–60 秒。', true);
+	showOverlay(t("正在连接 PS5…"), t("主机在待机的话会自动唤醒，冷启动大概 30–60 秒。"), true);
 	$('#hud-title').textContent = host.name;
 
 	try {
@@ -1225,14 +1216,14 @@ async function startSession(host, opts) {
 		if (err.status === 409) {
 			// 多半是刚刷新过页面：NAS 上的会话还在，直接接回去比重新开一个快得多
 			await refreshState().catch(() => {});
-			showOverlay('NAS 上已有会话', '选「接入」继续这个会话，或「结束旧的重开」。', false);
+			showOverlay(t("NAS 上已有会话"), t("选「接入」继续这个会话，或「结束旧的重开」。"), false);
 			openModal({
-				title: 'NAS 上已有串流',
-				body: '可能是另一个标签页／设备，也可能是你刚刷新过页面。直接接入可以继续用同一个会话，不需要重新唤醒 PS5。',
+				title: t("NAS 上已有串流"),
+				body: t("可能是另一个标签页／设备，也可能是你刚刷新过页面。直接接入可以继续用同一个会话，不需要重新唤醒 PS5。"),
 				actions: [
-					{ label: '取消', value: false },
+					{ label: t("取消"), value: false },
 					{
-						label: '结束旧的重开',
+						label: t("结束旧的重开"),
 						onClick: async () => {
 							await api.stop().catch(() => {});
 							await refreshState().catch(() => {});
@@ -1241,7 +1232,7 @@ async function startSession(host, opts) {
 						},
 					},
 					{
-						label: '接入',
+						label: t("接入"),
 						primary: true,
 						onClick: () => {
 							attachSession();
@@ -1253,8 +1244,8 @@ async function startSession(host, opts) {
 			return;
 		}
 
-		toast(err.message, 'error', 6000);
-		showOverlay('无法开始串流', err.message, false);
+		toast(localizedError(err), 'error', 6000);
+		showOverlay(t("无法开始串流"), localizedError(err), false);
 	}
 }
 
@@ -1275,10 +1266,10 @@ function attachSession() {
 	preparePlayer();
 
 	state.audio.enable().then((ok) => {
-		if (!ok) toast('浏览器不支持 WebCodecs 音频解码，本次没有声音', 'error', 5000);
+		if (!ok) toast(t("浏览器不支持 WebCodecs 音频解码，本次没有声音"), 'error', 5000);
 	});
 
-	showOverlay('正在接回串流…', '主机不会被重新唤醒，画面应该几秒内就回来。', true);
+	showOverlay(t("正在接回串流…"), t("主机不会被重新唤醒，画面应该几秒内就回来。"), true);
 	$('#hud-title').textContent = cur.nickname || cur.name || host.name;
 
 	// 接回来但如果 8 秒还没有任何一帧，多半是这个会话已经死了：
@@ -1288,11 +1279,11 @@ function attachSession() {
 		if (state.session?.state !== 'streaming') return;
 		if (state.lastVideoAt && performance.now() - state.lastVideoAt < 5000) return;
 		showOverlay(
-			'接回来了，但没有画面',
-			'这个会话可能已经断了。点下面的按钮结束它，再回上一页重新开始串流。',
+			t("接回来了，但没有画面"),
+			t("这个会话可能已经断了。点下面的按钮结束它，再回上一页重新开始串流。"),
 			false
 		);
-		$('#btn-overlay-cancel').textContent = '结束这个会话';
+		$('#btn-overlay-cancel').textContent = t("结束这个会话");
 	}, 8000);
 }
 
@@ -1306,7 +1297,7 @@ function preparePlayer() {
 	state.video = new VideoPipeline(canvas, {
 		onKeyRequest: () => state.socket?.sendJson({ t: 'idr' }),
 		onError: (msg) => {
-			showOverlay('视频解码出错', msg, false);
+			showOverlay(t("视频解码出错"), localizedError(msg), false);
 		},
 		onStats: ({ fps, queue, arriveAge, displayAge, hardware, drops }) => {
 			state.lastVideoStats = { fps, queue, arriveAge, displayAge, hardware, drops };
@@ -1355,13 +1346,13 @@ function preparePlayer() {
 			return;
 		}
 		if (state.mode === 'pip') {
-			setPipStatus('连接断开，重连中…');
+			setPipStatus(t("连接断开，重连中…"));
 			clearTimeout(state.liveTimer);
 			state.liveTimer = setTimeout(pollLive, 4000);
 			return;
 		}
 		if (state.session.state === 'streaming') {
-			showOverlay('与 NAS 的连接断开', '正在自动重连…', true);
+			showOverlay(t("与 NAS 的连接断开"), t("正在自动重连…"), true);
 		}
 	};
 	state.socket.connect();
@@ -1389,10 +1380,10 @@ function preparePlayer() {
 
 	if (!VideoPipeline.supported) {
 		showOverlay(
-			'视频解码不可用',
+			t("视频解码不可用"),
 			window.isSecureContext
-				? '这个浏览器没有 WebCodecs，请换成 Chrome / Edge 94+、Safari 16.4+ 或 Firefox 130+。'
-				: '当前是 http 页面，浏览器只在 HTTPS 或 localhost 下开放 WebCodecs。换成 https 打开，或把本站加进 Chrome 的 insecure-origin 白名单。',
+				? t("这个浏览器没有 WebCodecs，请换成 Chrome / Edge 94+、Safari 16.4+ 或 Firefox 130+。")
+				: t("当前是 http 页面，浏览器只在 HTTPS 或 localhost 下开放 WebCodecs。换成 https 打开，或把本站加进 Chrome 的 insecure-origin 白名单。"),
 			false
 		);
 	}
@@ -1405,7 +1396,7 @@ function onServerMessage(msg) {
 			if (msg.audio) state.audio?.configure(msg.audio);
 			if (msg.state === 'streaming') {
 				hideOverlay();
-				if (state.mode === 'pip') setPipStatus(msg.current?.nickname || msg.current?.name || '直播中');
+				if (state.mode === 'pip') setPipStatus(msg.current?.nickname || msg.current?.name || t("直播中"));
 			} else if (msg.state === 'idle') {
 				if (state.mode === 'pip') {
 					// 轮询说在播、连上却发现结束了：回封面重新计时
@@ -1413,7 +1404,7 @@ function onServerMessage(msg) {
 					return;
 				}
 				// 接回来的时候会话其实已经结束了
-				showOverlay('这个会话已经结束了', '回上一页点「开始串流」重新连一次。', false);
+				showOverlay(t("这个会话已经结束了"), t("回上一页点「开始串流」重新连一次。"), false);
 			}
 			state.session = { state: msg.state, current: msg.current };
 			updateStatusPill();
@@ -1424,14 +1415,14 @@ function onServerMessage(msg) {
 			updateStatusPill();
 			if (msg.state === 'streaming') {
 				hideOverlay();
-				if (state.mode === 'pip') setPipStatus(msg.current?.nickname || msg.current?.name || '直播中');
+				if (state.mode === 'pip') setPipStatus(msg.current?.nickname || msg.current?.name || t("直播中"));
 				// AudioContext 可能因为自动播放策略被挂起
 				if (state.mode === 'control' && state.audio && (!state.audio.ctx || state.audio.ctx.state !== 'running')) {
 					$('#audio-unlock').classList.remove('hidden');
 				}
 			} else if (msg.state === 'connecting') {
-				if (state.mode === 'pip') setPipStatus('正在连接 PS5…');
-				else showOverlay('正在连接 PS5…', '握手需要几秒，请稍候。', true);
+				if (state.mode === 'pip') setPipStatus(t("正在连接 PS5…"));
+				else showOverlay(t("正在连接 PS5…"), t("握手需要几秒，请稍候。"), true);
 			} else if (msg.state === 'idle' && state.mode === 'pip') {
 				exitToCover();
 				return;
@@ -1447,7 +1438,7 @@ function onServerMessage(msg) {
 			break;
 
 		case 'waking':
-			showOverlay('正在唤醒 PS5…', '主机在待机，已发唤醒包，冷启动大约 30 秒，别关页面。', true);
+			showOverlay(t("正在唤醒 PS5…"), t("主机在待机，已发唤醒包，冷启动大约 30 秒，别关页面。"), true);
 			break;
 
 		case 'nickname':
@@ -1463,7 +1454,7 @@ function onServerMessage(msg) {
 			if (v) {
 				const n = typeof msg.anons === 'number' ? msg.anons : msg.count;
 				const limit = state.lastLive?.limit || 0;
-				v.textContent = limit > 0 ? `${n}/${limit} 人在看` : `${n} 人在看`;
+				v.textContent = t('viewers', limit > 0 ? `${n}/${limit}` : n);
 			}
 			break;
 		}
@@ -1476,7 +1467,7 @@ function onServerMessage(msg) {
 		}
 
 		case 'chat_reject':
-			toast(msg.reason === 'slow' ? '慢一点，2 秒能发一条' : '说得够多啦，歇一小时再说', '', 2500);
+			toast(msg.reason === 'slow' ? t("慢一点，2 秒能发一条") : t("说得够多啦，歇一小时再说"), '', 2500);
 			break;
 
 		case 'rumble':
@@ -1493,33 +1484,33 @@ function onServerMessage(msg) {
 			if (state.mode === 'pip') {
 				// 直播结束了：收起小窗，回封面重新轮询
 				setTimeout(exitToCover, 1500);
-				setPipStatus('直播已结束');
+				setPipStatus(t("直播已结束"));
 				break;
 			}
 			showOverlay(
-				msg.error ? '会话中断' : '会话已结束',
-				`${msg.reason || ''}${msg.detail ? ' · ' + msg.detail : ''}`,
+				msg.error ? t("会话中断") : t("会话已结束"),
+				msg.error ? localizedError(msg.detail || msg.reason) : '',
 				false
 			);
 			break;
 
 		case 'error':
-			toast(msg.message, 'error', 6000);
+			toast(localizedError(msg.message), 'error', 6000);
 			break;
 
 		case 'stopping':
-			showOverlay('正在结束会话…', '', true);
+			showOverlay(t("正在结束会话…"), '', true);
 			break;
 
 		case 'sleep_sent':
-			toast('主机正在进入待机…', 'ok');
+			toast(t("主机正在进入待机…"), 'ok');
 			break;
 
 		case 'discovered':
 			break;
 
 		case 'bridge_exit':
-			showOverlay('后台服务已退出', 'NAS 上的桥接进程挂了，检查容器日志。', false);
+			showOverlay(t("后台服务已退出"), t("NAS 上的桥接进程挂了，检查容器日志。"), false);
 			break;
 
 		default:
@@ -1530,22 +1521,22 @@ function onServerMessage(msg) {
 function openPinDialog(incorrect) {
 	// 观战者不该看到配对 PIN 弹窗（那是控制端的事）
 	if (state.mode !== 'control') return;
-	const input = h('input', { placeholder: '8 位数字', inputmode: 'numeric', autocomplete: 'off' });
+	const input = h('input', { placeholder: t("8 位数字"), inputmode: 'numeric', autocomplete: 'off' });
 
 	openModal({
-		title: 'PS5 要求输入配对 PIN',
+		title: t("PS5 要求输入配对 PIN"),
 		body: h('div', {}, [
 			h('p', {
 				text: incorrect
-					? '上次的 PIN 不正确。请重新查看 PS5 屏幕上的「关联设备」PIN。'
-					: 'PS5 屏幕上显示了 PIN，请输入。',
+					? t("上次的 PIN 不正确。请重新查看 PS5 屏幕上的「关联设备」PIN。")
+					: t("PS5 屏幕上显示了 PIN，请输入。"),
 			}),
 			input,
 		]),
 		dismissable: false,
 		actions: [
 			{
-				label: '取消串流',
+				label: t("取消串流"),
 				value: false,
 				onClick: () => {
 					stopSession();
@@ -1553,19 +1544,19 @@ function openPinDialog(incorrect) {
 				},
 			},
 			{
-				label: '提交',
+				label: t("提交"),
 				primary: true,
 				onClick: async () => {
 					const pin = input.value.trim();
 					if (!/^\d{4,10}$/.test(pin)) {
-						toast('请输入数字 PIN', 'error');
+						toast(t("请输入数字 PIN"), 'error');
 						return false;
 					}
 					try {
 						await api.sendPin(pin);
-						toast('已提交 PIN', 'ok');
+						toast(t("已提交 PIN"), 'ok');
 					} catch (err) {
-						toast(err.message, 'error');
+						toast(localizedError(err), 'error');
 					}
 					return true;
 				},
@@ -1613,17 +1604,17 @@ function updateHudStats() {
 
 	if (v) parts.push(`${v.fps} fps`);
 	if (s?.kbps) parts.push(`${Math.round(s.kbps / 1000)} Mbps`);
-	if (v?.processMs !== undefined) parts.push(`处理 ${v.processMs}ms`);
-	if (v?.arriveAge) parts.push(`传输 ${v.arriveAge}ms`);
+	if (v?.processMs !== undefined) parts.push(t('processing', v.processMs));
+	if (v?.arriveAge) parts.push(t('transfer', v.arriveAge));
 	if (state.rtt) parts.push(`RTT ${state.rtt}ms`);
-	if (v?.queue !== undefined) parts.push(`队列 ${v.queue}`);
+	if (v?.queue !== undefined) parts.push(t('queue', v.queue));
 
 	$('#hud-stats').textContent = parts.join(' · ') || '--';
 	$('#hud-stats').title =
-		'处理 = 从浏览器收到这一帧到画到屏幕（纯本地时钟，最可信）\n' +
-		'传输 = 帧从 NAS 到你浏览器（依赖两边时钟同步，仅供参考）\n' +
-		'RTT = 往返时延；队列 = 待解码帧数\n' +
-		`解码器: ${state.lastVideoStats?.hardware ? '已请求硬解' : '默认'}，跳过关键帧次数: ${state.lastVideoStats?.drops ?? 0}`;
+		t("处理 = 从浏览器收到这一帧到画到屏幕（纯本地时钟，最可信）") + '\n' +
+		t("传输 = 帧从 NAS 到你浏览器（依赖两边时钟同步，仅供参考）") + '\n' +
+		t("RTT = 往返时延；队列 = 待解码帧数") + '\n' +
+		t('decoder', state.lastVideoStats?.hardware ? t("已请求硬解") : t("默认"), state.lastVideoStats?.drops ?? 0);
 }
 
 function showOverlay(title, text, spinner) {
@@ -1637,7 +1628,7 @@ function showOverlay(title, text, spinner) {
 	$('#overlay-title').textContent = title;
 	$('#overlay-text').textContent = text || '';
 	overlay.querySelector('.spinner').classList.toggle('hidden', !spinner);
-	$('#btn-overlay-cancel').textContent = spinner ? '取消' : '返回';
+	$('#btn-overlay-cancel').textContent = spinner ? t("取消") : t("返回");
 }
 
 function hideOverlay() {
@@ -2198,7 +2189,7 @@ async function toggleFullscreen() {
 		state.immersive = on;
 		if (on) {
 			tryLockLandscape();
-			toast('已进入沉浸模式。iPhone 上要真正的全屏（没有地址栏），请用「分享 → 添加到主屏幕」，从图标打开。', '', 9000);
+			toast(t("已进入沉浸模式。iPhone 上要真正的全屏（没有地址栏），请用「分享 → 添加到主屏幕」，从图标打开。"), '', 9000);
 		}
 		return;
 	}
@@ -2215,7 +2206,7 @@ async function toggleFullscreen() {
 		// 原生全屏被拒绝（有些浏览器要求用户手势、或策略禁止）时退回沉浸模式
 		const on = document.body.classList.toggle('immersive');
 		state.immersive = on;
-		if (on) toast('系统不允许网页全屏，已切换到沉浸模式：' + (err?.message || 'unknown'), '', 6000);
+		if (on) toast(t("系统不允许网页全屏，已切换到沉浸模式："), '', 6000);
 	}
 }
 
@@ -2263,9 +2254,9 @@ function buildTouchUI() {
 	});
 	// 顺序按手柄：分享 - PS - 选项；触摸板不在这里（点画面中间就是按下触摸板）
 	center.append(
-		makeButton('分享', BTN.SHARE, '', true, 'tb-inline'),
+		makeButton(t("分享"), BTN.SHARE, '', true, 'tb-inline'),
 		makeButton('PS', BTN.PS, '', true, 'tb-inline'),
-		makeButton('选项', BTN.OPTIONS, '', true, 'tb-inline')
+		makeButton(t("选项"), BTN.OPTIONS, '', true, 'tb-inline')
 	);
 	ui.append(center);
 
@@ -2307,9 +2298,9 @@ async function openLogs() {
 	state.logsTimer = setInterval(poll, 1500);
 
 	const result = await openModal({
-		title: '运行日志',
+		title: t("运行日志"),
 		body,
-		actions: [{ label: '关闭', primary: true, value: true }],
+		actions: [{ label: t("关闭"), primary: true, value: true }],
 	});
 
 	clearInterval(state.logsTimer);
@@ -2319,17 +2310,17 @@ async function openLogs() {
 
 function openKeysHelp() {
 	const rows = [
-		['方向键', '十字键'],
-		['W A S D', '左摇杆'],
+		[t("方向键"), t("十字键")],
+		['W A S D', t("左摇杆")],
 		['K / L / J / I', '✕ / ○ / □ / △'],
 		['Q / E', 'L1 / R1'],
 		['1 / 3', 'L2 / R2'],
 		['U / O', 'L3 / R3'],
 		['Enter', 'Options'],
 		['Backspace', 'Share'],
-		['Tab', '触摸板按下'],
-		['P', 'PS 键'],
-		['鼠标拖动', '触摸板滑动'],
+		['Tab', t("触摸板按下")],
+		['P', t("PS 键")],
+		[t("鼠标拖动"), t("触摸板滑动")],
 	];
 
 	const table = h('table', { class: 'kbd-table' });
@@ -2338,9 +2329,9 @@ function openKeysHelp() {
 	}
 
 	openModal({
-		title: '键盘 / 鼠标映射',
+		title: t("键盘 / 鼠标映射"),
 		body: table,
-		actions: [{ label: '知道了', primary: true, value: true }],
+		actions: [{ label: t("知道了"), primary: true, value: true }],
 	});
 }
 
@@ -2481,7 +2472,7 @@ function bindStatic() {
 
 	$('#btn-touch').addEventListener('click', () => {
 		setTouchVisible(!state.touchVisible);
-		toast(state.touchVisible ? '屏幕按键已开启' : '屏幕按键已关闭');
+		toast(state.touchVisible ? t("屏幕按键已开启") : t("屏幕按键已关闭"));
 	});
 
 	$('#btn-layout').addEventListener('click', openLayoutDialog);
@@ -2492,9 +2483,9 @@ function bindStatic() {
 	$('#btn-resume-stop').addEventListener('click', async () => {
 		try {
 			await api.stop();
-			toast('已结束 NAS 上的会话');
+			toast(t("已结束 NAS 上的会话"));
 		} catch (err) {
-			toast(err.message, 'error');
+			toast(localizedError(err), 'error');
 		}
 		$('#resume-bar').classList.add('hidden');
 		await refreshState().catch(() => {});
@@ -2504,19 +2495,19 @@ function bindStatic() {
 
 	$('#btn-sleep').addEventListener('click', async () => {
 		const ok = await openModal({
-			title: '让 PS5 进入待机？',
-			body: '主机会切到休息模式，串流会断开。下次回来点「唤醒」就行。',
+			title: t("让 PS5 进入待机？"),
+			body: t("主机会切到休息模式，串流会断开。下次回来点「唤醒」就行。"),
 			actions: [
-				{ label: '取消', value: false },
-				{ label: '待机', primary: true, value: true },
+				{ label: t("取消"), value: false },
+				{ label: t("待机"), primary: true, value: true },
 			],
 		});
 		if (!ok) return;
 		try {
 			await api.sleep();
-			toast('已发送待机命令');
+			toast(t("已发送待机命令"));
 		} catch (err) {
-			toast(err.message, 'error');
+			toast(localizedError(err), 'error');
 		}
 	});
 
@@ -2585,6 +2576,7 @@ function bindStatic() {
 }
 
 async function main() {
+	initLocale();
 	bindStatic();
 
 	if (!window.isSecureContext) showInsecureBanner();
@@ -2592,8 +2584,8 @@ async function main() {
 	if (!VideoPipeline.supported) {
 		toast(
 			window.isSecureContext
-				? '这个浏览器不支持 WebCodecs，请用 Chrome / Edge 94+、Safari 16.4+ 或 Firefox 130+'
-				: '当前是 http 页面，浏览器禁用了 WebCodecs（会黑屏）。请用 https 打开本站。',
+				? t("这个浏览器不支持 WebCodecs，请用 Chrome / Edge 94+、Safari 16.4+ 或 Firefox 130+")
+				: t("当前是 http 页面，浏览器禁用了 WebCodecs（会黑屏）。请用 https 打开本站。"),
 			'error',
 			9000
 		);

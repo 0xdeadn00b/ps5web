@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-//
-// Opus 音频通路：AudioDecoder 解码成 PCM，交给 AudioWorklet 里的环形缓冲播放。
-// 环形缓冲是为了吸收网络抖动：先攒够 ~50ms 再出声，后面就不会断断续续。
+
+const PENDING_AUDIO_MS = 60;
+const MAX_PENDING_PACKETS = 400;
 
 export class AudioPipeline {
 	constructor() {
@@ -42,7 +42,6 @@ export class AudioPipeline {
 
 			this.gain = this.ctx.createGain();
 			this.gain.gain.value = this.muted ? 0 : 1;
-
 			this.node.connect(this.gain).connect(this.ctx.destination);
 
 			this.node.port.onmessage = (e) => {
@@ -57,10 +56,12 @@ export class AudioPipeline {
 			this.enabled = true;
 			console.log('[audio] AudioContext 就绪', this.ctx.sampleRate, this.ctx.state);
 
-			// 补齐在 enable 之前收到的包
 			const queued = this.pendingPackets;
 			this.pendingPackets = [];
-			for (const pkt of queued) this.push(pkt);
+			const cutoff = performance.now() - PENDING_AUDIO_MS;
+			for (const { buf, receivedAt } of queued) {
+				if (receivedAt >= cutoff) this.push(buf);
+			}
 
 			return true;
 		} catch (err) {
@@ -112,7 +113,17 @@ export class AudioPipeline {
 		if (!buf || buf.length <= 8) return;
 
 		if (!this.enabled) {
-			if (this.pendingPackets.length < 400) this.pendingPackets.push(buf);
+			const now = performance.now();
+			const cutoff = now - PENDING_AUDIO_MS;
+			const queue = this.pendingPackets;
+			queue.push({ buf, receivedAt: now });
+
+			while (
+				queue.length > MAX_PENDING_PACKETS ||
+				(queue.length && queue[0].receivedAt < cutoff)
+			) {
+				queue.shift();
+			}
 			return;
 		}
 
@@ -121,8 +132,6 @@ export class AudioPipeline {
 		const dv = new DataView(buf.buffer, buf.byteOffset, 8);
 		const ts = Number(dv.getBigUint64(0, true));
 		const data = buf.subarray(8);
-
-		// 时间戳必须单调递增，bridge 用的是单调时钟，直接透传即可
 		this.timestamp = Math.max(this.timestamp + 1, Math.round(ts));
 
 		try {
@@ -146,7 +155,6 @@ export class AudioPipeline {
 
 		const frames = data.numberOfFrames;
 		const channels = data.numberOfChannels;
-
 		const left = new Float32Array(frames);
 		const right = new Float32Array(frames);
 
