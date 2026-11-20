@@ -228,6 +228,10 @@ function setPlayerMode(mode) {
 		player.style.left = player.style.top = player.style.right = player.style.bottom = '';
 		player.classList.remove('pip-moved');
 	} else {
+		// watch 态的直播间 UI 就在 view-watch 里，必须保留；
+		// control 态是纯播放器，其他视图不藏会被 1.2.9 的 fixed z:80 规则盖住（点了没反应）
+		if (mode === 'watch') showView('watch');
+		else showView(null);
 		body.style.overflow = 'hidden';
 		$('#view-player').style.left = $('#view-player').style.top = $('#view-player').style.right = '';
 	}
@@ -1728,6 +1732,7 @@ async function stopSession() {
 	}
 	cleanupPlayer();
 	if (wasControl) {
+		setPlayerMode(null);
 		await refreshState();
 		showView('home');
 	} else {
