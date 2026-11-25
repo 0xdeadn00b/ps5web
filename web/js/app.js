@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import { initLocale, localizedError, nicknames, t } from './i18n.js';
+import { initLocale, localizedError, nicknames, t } from './i18n.js?v=16';
 import { api } from './api.js';
 import { StreamSocket } from './net.js';
 import { VideoPipeline } from './video.js';
@@ -824,13 +824,13 @@ function hostCard(host) {
 		host.paired
 			? h('button', {
 					class: 'ghost',
-					text: '重配对',
+					text: t("重配对"),
 					onclick: () => openPairDialog(host),
 			  })
 			: null,
 		h('button', {
 			class: 'ghost',
-			text: '编辑',
+			text: t("编辑"),
 			onclick: () => openEditHostDialog(host),
 		}),
 		h('button', {
@@ -874,28 +874,28 @@ function hostCard(host) {
 
 /** 编辑主机：改名 + 备注 + 查看/修改 PSN Account-ID（国服/港服各一条时靠名字区分） */
 function openEditHostDialog(host) {
-	const nameInput = h('input', { value: host.name || '', maxlength: '40', placeholder: '主机名称，如「小白PS5·港服」' });
-	const noteInput = h('input', { value: host.note || '', maxlength: '120', placeholder: '备注，如「给儿子留的号 / 周五晚家庭时间」' });
+	const nameInput = h('input', { value: host.name || '', maxlength: '40', placeholder: t("主机名称，如「小白PS5·港服」") });
+	const noteInput = h('input', { value: host.note || '', maxlength: '120', placeholder: t("备注，如「给儿子留的号 / 周五晚家庭时间」") });
 	const accountInput = h('input', {
 		value: host.accountId || '',
 		autocomplete: 'off',
-		placeholder: 'PSN Account-ID（base64，8 字节）',
+		placeholder: t("PSN Account-ID（base64，8 字节）"),
 	});
 
 	const body = h('div', {}, [
-		h('p', { class: 'muted small', text: `地址 ${host.address}（同一台 PS5 可以添加多条，不同 PSN 账号各配对一次，用名称区分）` }),
-		h('label', { class: 'field' }, [h('span', { text: '名称' }), nameInput]),
-		h('label', { class: 'field' }, [h('span', { text: '备注' }), noteInput]),
+		h('p', { class: 'muted small', text: t("hostAddressHelp", host.address) }),
+		h('label', { class: 'field' }, [h('span', { text: t("名称") }), nameInput]),
+		h('label', { class: 'field' }, [h('span', { text: t("备注") }), noteInput]),
 		h('label', { class: 'field' }, [h('span', { text: 'PSN Account-ID' }), accountInput]),
 		host.paired
-			? h('p', { class: 'muted small', text: '改 Account-ID 只更新记录；连不上/凭据失效（如 PS5 上取消过关联）请回列表点「重配对」。' })
-			: h('p', { class: 'muted small', text: '这台还没配对，配对时也会以这里的 Account-ID 为准。' }),
+			? h('p', { class: 'muted small', text: t("改 Account-ID 只更新记录；连不上/凭据失效（如 PS5 上取消过关联）请回列表点「重配对」。") })
+			: h('p', { class: 'muted small', text: t("这台还没配对，配对时也会以这里的 Account-ID 为准。") }),
 	]);
 
 	const submit = async () => {
 		const name = nameInput.value.trim();
 		if (!name) {
-			toast('名称不能为空', 'error');
+			toast(t("名称不能为空"), 'error');
 			return false;
 		}
 		try {
@@ -905,20 +905,20 @@ function openEditHostDialog(host) {
 				accountId: accountInput.value.trim(),
 			});
 			await refreshState();
-			toast('已保存', 'ok');
+			toast(t("已保存"), 'ok');
 			return true;
 		} catch (err) {
-			toast(err.message, 'error');
+			toast(localizedError(err), 'error');
 			return false;
 		}
 	};
 
 	openModal({
-		title: `编辑 ${host.name}`,
+		title: t("hostEditTitle", host.name),
 		body,
 		actions: [
-			{ label: '取消', value: false },
-			{ label: '保存', primary: true, onClick: submit },
+			{ label: t("取消"), value: false },
+			{ label: t("保存"), primary: true, onClick: submit },
 		],
 	});
 }
@@ -1004,7 +1004,7 @@ function openPairDialog(host) {
 	});
 	const accountInput = h('input', {
 		value: host.accountId || '',
-		placeholder: 'PSN Account-ID（base64，8 字节）',
+		placeholder: t("PSN Account-ID（base64，8 字节）"),
 		autocomplete: 'off',
 	});
 
@@ -1016,15 +1016,15 @@ function openPairDialog(host) {
 		repair
 			? h('p', {
 					text:
-						'2. PIN 每次打开该页面都会刷新，用最新的 PIN 重新配对即可；成功会覆盖旧凭据，这条记录继续用。',
+						t("2. PIN 每次打开该页面都会刷新，用最新的 PIN 重新配对即可；成功会覆盖旧凭据，这条记录继续用。"),
 			  })
 			: h('p', {
 					text:
-						'2. 用电脑或手机打开 psn.flipscreen.games，登录后复制 Account-ID（base64 那串）。',
+						t("2. 用电脑或手机打开 psn.flipscreen.games，登录后复制 Account-ID（base64 那串）。"),
 			  }),
 		h('label', { class: 'field' }, [h('span', { text: 'PIN' }), pinInput]),
 		h('label', { class: 'field' }, [h('span', { text: 'PSN Account-ID' }), accountInput]),
-		h('p', { class: 'muted small', text: '凭据保存在 NAS 本地，配一次就够；连不上多半是 PS5 那边取消过关联，重配对一次即可。' }),
+		h('p', { class: 'muted small', text: t("凭据保存在 NAS 本地，配一次就够；连不上多半是 PS5 那边取消过关联，重配对一次即可。") }),
 	]);
 
 	const submit = async () => {
@@ -1045,7 +1045,7 @@ function openPairDialog(host) {
 		try {
 			await api.pair(host.id, pin, accountId);
 			await refreshState();
-			toast(repair ? '重新配对成功，可以直接串流了' : '配对成功，可以直接串流了', 'ok');
+			toast(repair ? t("重新配对成功，可以直接串流了") : t("配对成功，可以直接串流了"), 'ok');
 			return true;
 		} catch (err) {
 			toast(localizedError(err), 'error', 6000);
@@ -1055,11 +1055,11 @@ function openPairDialog(host) {
 	};
 
 	openModal({
-		title: `${repair ? '重新配对' : '配对'} ${host.name}`,
+		title: t(repair ? "hostRepairTitle" : "pairConsole", host.name),
 		body,
 		actions: [
-			{ label: '取消', value: false },
-			{ label: repair ? '重新配对' : '开始配对', primary: true, onClick: submit },
+			{ label: t("取消"), value: false },
+			{ label: repair ? t("重配对") : t("开始配对"), primary: true, onClick: submit },
 		],
 	});
 }

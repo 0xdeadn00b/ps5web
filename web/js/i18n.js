@@ -11,6 +11,23 @@ try {
 // Each row contains English, Traditional Chinese, and Simplified Chinese.
 // Upstream Chinese strings serve as keys so the call-site diffs stay small.
 const messages = {
+	"编辑": ["Edit","編輯","编辑"],
+	"重配对": ["Re-pair","重新配對","重配对"],
+	"名称": ["Name","名稱","名称"],
+	"备注": ["Note","備註","备注"],
+	"保存": ["Save","儲存","保存"],
+	"已保存": ["Saved.","已儲存。","已保存"],
+	"名称不能为空": ["Enter a console name.","請輸入主機名稱。","名称不能为空"],
+	"主机名称，如「小白PS5·港服」": ["Console name, e.g. Living Room PS5","主機名稱，例如「客廳 PS5」","主机名称，如「小白PS5·港服」"],
+	"备注，如「给儿子留的号 / 周五晚家庭时间」": ["Optional note, e.g. Family account","選填備註，例如「家庭帳戶」","备注，如「给儿子留的号 / 周五晚家庭时间」"],
+	"改 Account-ID 只更新记录；连不上/凭据失效（如 PS5 上取消过关联）请回列表点「重配对」。": ["Changing the Account ID only updates this entry. If pairing credentials no longer work, select Re-pair in the console list.","變更帳戶 ID 只會更新此筆資料。若配對憑證已失效，請在主機清單選擇「重新配對」。","改 Account-ID 只更新记录；连不上/凭据失效（如 PS5 上取消过关联）请回列表点「重配对」。"],
+	"这台还没配对，配对时也会以这里的 Account-ID 为准。": ["This entry is not paired yet. The saved Account ID will be suggested when pairing.","此筆主機資料尚未配對。配對時會帶入已儲存的帳戶 ID。","这台还没配对，配对时也会以这里的 Account-ID 为准。"],
+	"2. PIN 每次打开该页面都会刷新，用最新的 PIN 重新配对即可；成功会覆盖旧凭据，这条记录继续用。": ["2. Use the latest PIN to re-pair. Successful pairing replaces the old credentials without creating another entry.","2. 請使用最新的 PIN 重新配對。成功後會取代舊憑證並保留此筆資料。","2. PIN 每次打开该页面都会刷新，用最新的 PIN 重新配对即可；成功会覆盖旧凭据，这条记录继续用。"],
+	"凭据保存在 NAS 本地，配一次就够；连不上多半是 PS5 那边取消过关联，重配对一次即可。": ["Credentials are stored on the NAS. If the console was unlinked, re-pair it.","配對憑證儲存在 NAS。若主機已取消連結，請重新配對。","凭据保存在 NAS 本地，配一次就够；连不上多半是 PS5 那边取消过关联，重配对一次即可。"],
+	"重新配对成功，可以直接串流了": ["Re-paired. You can now start streaming.","已重新配對，現在可以開始串流。","重新配对成功，可以直接串流了"],
+	"hostEditTitle": ["Edit {0}","編輯 {0}","编辑 {0}"],
+	"hostRepairTitle": ["Re-pair {0}","重新配對 {0}","重新配对 {0}"],
+	"hostAddressHelp": ["Address: {0}. Use different names for entries paired to different PSN accounts on the same PS5.","位址：{0}。同一台 PS5 若配對不同的 PSN 帳戶，請使用不同名稱區分。","地址 {0}（同一台 PS5 可以添加多条，不同 PSN 账号各配对一次，用名称区分）"],
 	"空闲": ["Idle", "閒置", "空闲"],
 	"扫描中": ["Scanning", "掃描中", "扫描中"],
 	"配对中": ["Pairing", "配對中", "配对中"],
