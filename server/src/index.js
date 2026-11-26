@@ -377,7 +377,11 @@ async function handleApi(req, res, url) {
 
 		if (method === 'PATCH' && !action) {
 			const body = await readJsonBody(req);
-			if (body.name) updateHost(host.id, { name: String(body.name).slice(0, 40) });
+			const patch = {};
+			if (body.name !== undefined) patch.name = String(body.name).trim().slice(0, 40);
+			if (body.note !== undefined) patch.note = String(body.note).trim().slice(0, 120);
+			if (body.accountId !== undefined) patch.accountId = String(body.accountId).trim().slice(0, 64);
+			if (Object.keys(patch).length) updateHost(host.id, patch);
 			sendJson(res, 200, { host: publicHost(getHost(host.id)) });
 			return true;
 		}
@@ -410,6 +414,7 @@ async function handleApi(req, res, url) {
 				updateHost(host.id, {
 					registKey: info.registKey || '',
 					rpKey: info.rpKey || '',
+					accountId,
 					mac: info.mac || '',
 					lastPairedAt: Date.now(),
 					ps5: info.ps5 !== undefined ? !!info.ps5 : host.ps5,
